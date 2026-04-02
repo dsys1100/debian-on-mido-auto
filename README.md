@@ -1,5 +1,7 @@
 # fork Readme WIP
+It is base image, no tweaks included for now
 
+-----
 
 # 移植 Debian Linux 到 mido
 

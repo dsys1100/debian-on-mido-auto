@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: write # Give permission to put the release into the repo
 
 jobs:
   build:
@@ -16,7 +16,47 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          sudo rm -rf /usr/share/swift /usr/local/graalvm /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache /opt/az /usr/share/az_* /usr/local/julia*
+          sudo rm -rf /usr/local/share/powershell /usr/share/miniconda /usr/lib/jvm
+          sudo rm -rf /usr/share/kotlinc /usr/share/gradle* /usr/share/sbt
+          sudo rm -rf /usr/local/share/vcpkg /usr/local/share/chromium
+          sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli google-cloud-sdk google-chrome-stable firefox mono-devel '^temurin-.*' '^mysql-.*' '^postgresql-.*' || true
+          sudo apt-get autoremove -y && sudo apt-get clean && sudo apt-get autoclean
+
       - name: Build
         run: |
           chmod +x *.sh
           ./build.sh
+
+      - name: Create Release Info
+        run: |
+          echo "Kernel version: 6.19.5" > release_body.txt
+          echo "Focaltech only." >> release_body.txt
+        shell: bash
+
+      - name: Create Git Tag and Release with unique name
+        id: vars
+        run: |
+          echo "tag_name=$(date +'%Y%m%d-%H%M%S'-UTC)" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.vars.outputs.tag_name }}
+          git push origin ${{ steps.vars.outputs.tag_name }}
+        shell: bash
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@master
+        with:
+          files: |
+            *.img
+          tag_name: ${{ steps.vars.outputs.tag_name }}
+          name: ${{ steps.vars.outputs.tag_name }}
+          draft: false
+          prerelease: false
+          body_path: release_body.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,23 +1,19 @@
 #!/bin/sh
 
-sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-sudo rm -rf /usr/share/swift /usr/local/graalvm /usr/local/.ghcup
-sudo rm -rf /opt/hostedtoolcache /opt/az /usr/share/az_* /usr/local/julia*
-sudo rm -rf /usr/local/share/powershell /usr/share/miniconda /usr/lib/jvm
-sudo rm -rf /usr/share/kotlinc /usr/share/gradle* /usr/share/sbt
-sudo rm -rf /usr/local/share/vcpkg /usr/local/share/chromium
-sudo apt remove -y '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli google-cloud-sdk google-chrome-stable firefox mono-devel '^temurin-.*' '^mysql-.*' '^postgresql-.*' || true
-sudo apt autoremove -y && sudo apt-get clean && sudo apt-get autoclean
+export CROSS_COMPILE=aarch64-linux-gnu-
+export ARCH=arm64
+export CC=aarch64-linux-gnu-gcc
+
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
-#git clone https://github.com/calico-cat-3333/debian-on-mido.git --depth 1
+#git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
 git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 6.19.5/main
 
 cd linux
 cp ../config .config
 make olddefconfig
-make -j$(nproc)
-make DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
+make -j$(nproc) -s
+make -s DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 
 git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1
@@ -49,7 +45,7 @@ sudo chroot rootfs /bin/bash -c "apt update && apt full-upgrade -y && apt autore
 sudo chroot rootfs /bin/bash -c "echo 'mido' > /etc/hostname"
 sudo chroot rootfs /bin/bash -c "echo '127.0.0.1 mido' >> /etc/hosts"
 
-sudo chroot rootfs /bin/bash -c "apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf -y"
+sudo chroot rootfs /bin/bash -c "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf -y"
 
 sudo chroot rootfs /bin/bash -c "echo 'root:000' | chpasswd"
 sudo chroot rootfs /bin/bash -c "useradd -m -G sudo -s /bin/bash user"
