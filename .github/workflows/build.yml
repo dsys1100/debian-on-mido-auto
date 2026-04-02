@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  workflow_dispatch: {} # Enables the manual start
+  push: # Autorun after commits
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build
+        run: |
+          ./build.sh

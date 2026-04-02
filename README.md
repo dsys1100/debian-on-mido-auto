@@ -1,3 +1,6 @@
+# fork Readme WIP
+
+
 # 移植 Debian Linux 到 mido
 
 尝试移植 Debian Linux 到红米 Note 4X 高通版（mido）上。
