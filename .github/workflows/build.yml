@@ -18,4 +18,5 @@ jobs:
 
       - name: Build
         run: |
+          chmod +x *.sh
           ./build.sh
