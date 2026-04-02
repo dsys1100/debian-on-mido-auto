@@ -1,13 +1,13 @@
 #!/bin/sh
 
-export CROSS_COMPILE=aarch64-linux-gnu-
-export ARCH=arm64
-export CC=aarch64-linux-gnu-gcc
-
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
 #git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
 git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 6.19.5/main
+
+export CROSS_COMPILE=aarch64-linux-gnu-
+export ARCH=arm64
+export CC=aarch64-linux-gnu-gcc
 
 cd linux
 cp ../config .config
