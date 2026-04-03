@@ -2,8 +2,15 @@
 
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
+export krnver=6.19.5
+export debver=trixie
+export username=user
+export userpass=000
+export hostname=mido
+export "chrootcomm=sudo chroot ./rootfs /bin/bash -c"
+
 #git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
-git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 6.19.5/main
+git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b $krnver/main
 
 export CROSS_COMPILE=aarch64-linux-gnu-
 export ARCH=arm64
@@ -12,51 +19,73 @@ export CC=aarch64-linux-gnu-gcc
 cd linux
 cp ../config .config
 make olddefconfig
+echo Linux Kernel building started...
 make -j$(nproc) -s
 make -s DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 
-git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1
-cd lk2nd
-sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' lk2nd/boot/extlinux.c
+git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
+cd ./lk2nd-ft
+sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 make lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-focaltech.img
 cd ..
 
-dd if=/dev/zero of=rootfs.img bs=1G count=3
-mkfs.ext4 -F rootfs.img
-mkdir rootfs
-sudo mount rootfs.img rootfs
+git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-gt
+cd ./lk2nd-gt
+sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
+sed -i 's/touchscreen-compatible = "edt,edt-ft5406";/touchscreen-compatible = "goodix,gt917d";/g' ./lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts
+make lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-goodix.img
+cd ..
 
-sudo debootstrap --arch arm64 trixie ./rootfs https://deb.debian.org/debian/
+dd if=/dev/zero of=./rootfs.img bs=1G count=3
+mkfs.ext4 -F ./rootfs.img
+mkdir ./rootfs
+sudo mount ./rootfs.img ./rootfs
 
-dd if=/dev/zero of=bootfs.img bs=1G count=1
+sudo debootstrap --arch arm64 $debver ./rootfs https://deb.debian.org/debian/
+
+dd if=/dev/zero of=./bootfs.img bs=1G count=1
 mkfs.ext2 bootfs.img
 
 sudo mount --bind /proc ./rootfs/proc
 sudo mount --bind /dev ./rootfs/dev
 sudo mount --bind /dev/pts ./rootfs/dev/pts
 sudo mount --bind /sys ./rootfs/sys
-sudo mount bootfs.img ./rootfs/boot
+sudo mount ./bootfs.img ./rootfs/boot
 
-sudo chroot rootfs /bin/bash -c "echo 'deb https://deb.debian.org/debian/ trixie main contrib non-free non-free-firmware' > /etc/apt/sources.list"
-sudo chroot rootfs /bin/bash -c "echo 'deb https://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware' >> /etc/apt/sources.list"
-sudo chroot rootfs /bin/bash -c "apt update && apt full-upgrade -y && apt autoremove -y"
+$chrootcomm "echo 'deb https://deb.debian.org/debian/ $debver main contrib non-free non-free-firmware' > /etc/apt/sources.list"
+$chrootcomm "echo 'deb https://security.debian.org/debian-security $debver-security main contrib non-free non-free-firmware' >> /etc/apt/sources.list"
+$chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y"
 
-sudo chroot rootfs /bin/bash -c "echo 'mido' > /etc/hostname"
-sudo chroot rootfs /bin/bash -c "echo '127.0.0.1 mido' >> /etc/hosts"
+$chrootcomm "echo '$hostname' > /etc/hostname"
+$chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
 
-sudo chroot rootfs /bin/bash -c "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf -y"
+$chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy zram-tools curl wget -y"
 
-sudo chroot rootfs /bin/bash -c "echo 'root:000' | chpasswd"
-sudo chroot rootfs /bin/bash -c "useradd -m -G sudo -s /bin/bash user"
-sudo chroot rootfs /bin/bash -c "echo 'user ALL=(ALL:ALL) ALL' >> /etc/sudoers.d/user"
-sudo chroot rootfs /bin/bash -c "chmod 0440 /etc/sudoers.d/user"
-sudo chroot rootfs /bin/bash -c "echo 'user:000' | chpasswd"
+$chrootcomm "echo 'root:$userpass' | chpasswd"
+$chrootcomm "useradd -m -G sudo -s /bin/bash $username"
+$chrootcomm "echo '$username ALL=(ALL:ALL) ALL' >> /etc/sudoers.d/$username"
+$chrootcomm "chmod 0440 /etc/sudoers.d/$username"
+$chrootcomm "echo '$username:$userpass' | chpasswd"
+$chrootcomm "usermod -aG sudo $username"
+$chrootcomm "usermod -aG audio $username"
+$chrootcomm "usermod -aG video $username"
+$chrootcomm "usermod -aG render $username"
+$chrootcomm "usermod -aG input $username"
+$chrootcomm "usermod -aG netdev $username"
+$chrootcomm "usermod -aG plugdev $username"
+$chrootcomm "usermod -aG bluetooth $username"
+
+dtc -I dts -O dtb -o ./fastcharge.dtbo ./fastcharge.dts
+sudo mkdir ./rootfs/boot/dtbo
+sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
 
 sudo cp -r ./firmware/* ./rootfs/lib/firmware/
 rm *-dbg_*.deb
 sudo cp linux*deb ./rootfs/tmp/
-sudo chroot rootfs /bin/bash -c "apt install -y /tmp/*.deb"
+$chrootcomm "apt install -y /tmp/*.deb"
 sudo rm ./rootfs/tmp/*
 sudo tee -a ./rootfs/etc/initramfs-tools/modules <<EOF
 edt_ft5x06
@@ -89,7 +118,7 @@ add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b00
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b01
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b02
 EOF
-sudo chroot rootfs /bin/bash -c "update-initramfs -u"
+$chrootcomm "update-initramfs -u"
 sudo mkdir ./rootfs/boot/extlinux
 sudo tee ./rootfs/boot/extlinux/extlinux.conf <<EOF
 timeout 0
@@ -97,12 +126,13 @@ default Debian
 menu title boot prev kernel
 
 label Debian
-	kernel /vmlinuz-6.19.5-calicocat-msm8953+
+	kernel /vmlinuz-$krnver-calicocat-msm8953+
 	fdtdir /
-	initrd /initrd.img-6.19.5-calicocat-msm8953+
+	initrd /initrd.img-$krnver-calicocat-msm8953+
 	append console=tty0 root=UUID=$(blkid -o value -s UUID rootfs.img) rw loglevel=3 splash
+	fdtoverlays /dtbo/fastcharge.dtbo
 EOF
-sudo cp ./rootfs/usr/lib/linux-image-6.19.5-calicocat-msm8953+/qcom/*mido* ./rootfs/boot/
+sudo cp ./rootfs/usr/lib/linux-image-$krnver-calicocat-msm8953+/qcom/*mido* ./rootfs/boot/
 sudo sh -c "echo 'UUID=$(blkid -o value -s UUID bootfs.img) /boot ext2 defaults 0 2' > ./rootfs/etc/fstab"
 sudo tee ./rootfs/etc/systemd/system/resizefs.service <<'EOF'
 [Unit]
@@ -118,7 +148,7 @@ RemainAfterExit=true
 [Install]
 WantedBy=default.target
 EOF
-sudo chroot rootfs /bin/bash -c "systemctl enable resizefs.service"
+$chrootcomm "systemctl enable resizefs.service"
 sudo tee ./rootfs/etc/systemd/system/serial-getty@ttyGS0.service <<EOF
 [Unit]
 Description=Serial Console Service on ttyGS0
@@ -132,16 +162,25 @@ RestartSec=0
 [Install]
 WantedBy=multi-user.target
 EOF
-sudo chroot rootfs /bin/bash -c "systemctl enable serial-getty@ttyGS0.service"
+$chrootcomm "systemctl enable serial-getty@ttyGS0.service"
 sudo sh -c "echo g_serial >> ./rootfs/etc/modules"
 git clone https://github.com/msm8953-mainline/alsa-ucm-conf.git --depth 1
-sudo cp -r alsa-ucm-conf/ucm2/* ./rootfs/usr/share/alsa/ucm2/
-
-sudo chroot rootfs /bin/bash -c "apt clean && apt autoclean"
+sudo cp -r ./alsa-ucm-conf/ucm2/* ./rootfs/usr/share/alsa/ucm2/
+sudo tee ./rootfs/etc/default/zramswap <<EOF
+ALGO=zstd
+PERCENT=75
+PRIORITY=100
+EOF
+$chrootcomm "apt clean && apt autoclean"
 
 sudo tee -a ./rootfs/etc/motd <<'EOF'
+
 Connect to Wi-Fi:
 sudo nmcli dev wifi connect "SSID" password "PASSWORD"
+
+Setup font and size in TTY:
+dpkg-reconfigure console-setup
+
 EOF
 
 sudo umount ./rootfs/proc
@@ -151,10 +190,15 @@ sudo umount ./rootfs/sys
 sudo umount ./rootfs/boot
 sudo umount ./rootfs
 
-img2simg rootfs.img rootfs-simg.img
-rm rootfs.img
-img2simg bootfs.img bootfs-simg.img
-rm bootfs.img
-mv ./lk2nd/build-lk2nd-msm8953/lk2nd.img ./lk2nd.img
+img2simg ./rootfs.img ./rootfs-$debver.img
+rm ./rootfs.img
+img2simg ./bootfs.img ./bootfs-$krnver.img
+rm ./bootfs.img
 
-ls -a
+tee ./release_body.txt <<EOF
+Kernel version: $krnver
+Debian version: $debver
+Username: $username
+User and root password: $userpass
+Hostname: $hostname
+EOF

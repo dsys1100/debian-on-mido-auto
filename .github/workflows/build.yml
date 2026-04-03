@@ -32,12 +32,6 @@ jobs:
           chmod +x *.sh
           ./build.sh
 
-      - name: Create Release Info
-        run: |
-          echo "Kernel version: 6.19.5" > release_body.txt
-          echo "Focaltech only." >> release_body.txt
-        shell: bash
-
       - name: Create Git Tag and Release with unique name
         id: vars
         run: |

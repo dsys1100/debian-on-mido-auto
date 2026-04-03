@@ -1,0 +1,11 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+        target-path = "/battery";
+        __overlay__ {
+            constant-charge-current-max-microamp = <1600000>;
+        };
+    };
+};
