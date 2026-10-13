@@ -2,8 +2,8 @@
 
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
-export krnver=6.19.5
-export debver=trixie
+export krnver=7.1.3
+export debver=sid
 export username=user
 export userpass=000
 export hostname=mido
@@ -17,7 +17,7 @@ export ARCH=arm64
 export CC=aarch64-linux-gnu-gcc
 
 cd linux
-cp ../config .config
+wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/57cff102e1716bd87e7236146581d61dc8d76b23/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64 -O .config
 make olddefconfig
 echo Linux Kernel building started...
 make -j$(nproc) -s
@@ -56,13 +56,15 @@ sudo mount --bind /sys ./rootfs/sys
 sudo mount ./bootfs.img ./rootfs/boot
 
 $chrootcomm "echo 'deb https://deb.debian.org/debian/ $debver main contrib non-free non-free-firmware' > /etc/apt/sources.list"
-$chrootcomm "echo 'deb https://security.debian.org/debian-security $debver-security main contrib non-free non-free-firmware' >> /etc/apt/sources.list"
+#$chrootcomm "echo 'deb https://security.debian.org/debian-security $debver-security main contrib non-free non-free-firmware' >> /etc/apt/sources.list"
 $chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
 
-$chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy zram-tools curl wget -y"
+$chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy modemmanager rmtfs qrtr-tools tqftpserv pipewire pipewire-pulse wireplumber alsa-utils zram-tools curl wget -y"
+$chrootcomm "apt-mark hold alsa-ucm-conf"
+$chrootcomm "systemctl enable rmtfs.service tqftpserv.service ModemManager.service"
 
 $chrootcomm "echo 'root:$userpass' | chpasswd"
 $chrootcomm "useradd -m -G sudo -s /bin/bash $username"
@@ -120,19 +122,20 @@ add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b02
 EOF
 $chrootcomm "update-initramfs -u"
 sudo mkdir ./rootfs/boot/extlinux
+KREL=$(ls ./rootfs/lib/modules | sort -V | tail -1)
 sudo tee ./rootfs/boot/extlinux/extlinux.conf <<EOF
 timeout 0
 default Debian
 menu title boot prev kernel
 
 label Debian
-	kernel /vmlinuz-$krnver-calicocat-msm8953+
+	kernel /vmlinuz-$KREL
 	fdtdir /
-	initrd /initrd.img-$krnver-calicocat-msm8953+
+	initrd /initrd.img-$KREL
 	append console=tty0 root=UUID=$(blkid -o value -s UUID rootfs.img) rw loglevel=3 splash
 	fdtoverlays /dtbo/fastcharge.dtbo
 EOF
-sudo cp ./rootfs/usr/lib/linux-image-$krnver-calicocat-msm8953+/qcom/*mido* ./rootfs/boot/
+sudo cp ./rootfs/usr/lib/linux-image-$KREL/qcom/*mido* ./rootfs/boot/
 sudo sh -c "echo 'UUID=$(blkid -o value -s UUID bootfs.img) /boot ext2 defaults 0 2' > ./rootfs/etc/fstab"
 sudo tee ./rootfs/etc/systemd/system/resizefs.service <<'EOF'
 [Unit]
