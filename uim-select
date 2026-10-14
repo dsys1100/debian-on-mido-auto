@@ -1,0 +1,168 @@
+#!/usr/bin/python3
+
+# ALERT!!! This script written by AI
+
+import re
+import subprocess
+import time
+
+DEVICE = "qrtr://0"
+ATTEMPTS = 30
+INTERVAL = 2
+LAST_ERROR = ""
+
+def qmi(*args):
+    global LAST_ERROR
+
+    try:
+        result = subprocess.run(
+            ["/usr/bin/qmicli", "-d", DEVICE, *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        if result.returncode != 0:
+            LAST_ERROR = (result.stderr or result.stdout).strip()
+
+        return result
+
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        LAST_ERROR = str(exc)
+        return None
+
+def get_usims(output):
+    result = []
+    slots = re.split(r"(?m)^Slot \[(\d+)\]:", output)
+
+    for i in range(1, len(slots), 2):
+        slot = int(slots[i])
+        data = slots[i + 1]
+
+        if not re.search(r"Card state:\s*'present'", data):
+            continue
+
+        apps = re.split(r"(?m)^\s*Application \[(\d+)\]:", data)
+
+        for j in range(1, len(apps), 2):
+            app_index = int(apps[j])
+            app = apps[j + 1]
+
+            if not re.search(
+                r"Application type:\s*'usim\s*\(2\)'",
+                app,
+            ):
+                continue
+
+            if not re.search(
+                r"Application state:\s*'ready'",
+                app,
+            ):
+                continue
+
+            parts = app.split("Application ID:", 1)
+
+            if len(parts) < 2:
+                continue
+
+            aid_text = parts[1].split(
+                "Personalization state:",
+                1,
+            )[0]
+
+            aid = "".join(
+                re.findall(r"\b[0-9A-Fa-f]{2}\b", aid_text)
+            )
+
+            if len(aid) >= 10 and len(aid) % 2 == 0:
+                result.append((slot, app_index, aid.upper()))
+
+    return sorted(result)
+
+def get_primary_session(output):
+    match = re.search(
+        r"Primary GW:\s*slot\s*'(\d+)',\s*application\s*'(\d+)'",
+        output,
+    )
+
+    if match:
+        return int(match.group(1)), int(match.group(2))
+
+    return None
+
+def main():
+    print(f"Waiting for modem at {DEVICE}")
+
+    for attempt in range(1, ATTEMPTS + 1):
+        status = qmi("--uim-get-card-status")
+
+        if status and status.returncode == 0:
+            usims = get_usims(status.stdout)
+
+            if usims:
+                slot, app_index, aid = usims[0]
+
+                print(
+                    f"Found USIM: slot {slot}, "
+                    f"app {app_index}, AID {aid}"
+                )
+
+                if get_primary_session(status.stdout) == (
+                    slot,
+                    app_index,
+                ):
+                    print("The requested USIM is already active.")
+                    return 0
+
+                if get_primary_session(status.stdout) is not None:
+                    deactivation = qmi(
+                        "--uim-change-provisioning-session="
+                        "activate=no,"
+                        "session-type=primary-gw-provisioning"
+                    )
+
+                    if not deactivation or deactivation.returncode != 0:
+                        print(
+                            "Warning: failed to deactivate "
+                            "the previous session."
+                        )
+
+                activation = qmi(
+                    "--uim-change-provisioning-session="
+                    "session-type=primary-gw-provisioning,"
+                    f"activate=yes,slot={slot},aid={aid}"
+                )
+
+                if activation and activation.returncode == 0:
+                    print(
+                        f"Successfully activated USIM in slot {slot}."
+                    )
+                    return 0
+
+                print("Failed to activate USIM.")
+
+                if LAST_ERROR:
+                    print(LAST_ERROR)
+
+                return 1
+
+            LAST_ERROR = (
+                "Card status was received, but no ready USIM "
+                "with a valid AID was parsed."
+            )
+
+        print(
+            f"Modem or USIM not ready "
+            f"({attempt}/{ATTEMPTS})."
+        )
+        time.sleep(INTERVAL)
+
+    print("Timed out waiting for a usable USIM.")
+
+    if LAST_ERROR:
+        print(f"Last error: {LAST_ERROR}")
+
+    return 1
+
+if __name__ == "__main__":
+    raise SystemExit(main())

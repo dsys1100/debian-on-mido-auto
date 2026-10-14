@@ -1,77 +1,78 @@
 # fork Readme WIP
-It is base image, no tweaks included for now
+It is a base image; no tweaks are included for now.  
+Original readme translated to English:
 
 -----
 
-# 移植 Debian Linux 到 mido
+# Porting Debian Linux to mido
 
-尝试移植 Debian Linux 到红米 Note 4X 高通版（mido）上。
+An attempt to port Debian Linux to the Qualcomm version of the Xiaomi Redmi Note 4X (mido).
 
-这部手机具有 postmarketOS 支持，移植基于 pmos 内核，并参考了网上现有的教程。
+This phone is supported by postmarketOS. The port is based on the pmos kernel and draws on existing tutorials available online.
 
-这台机器有多种供应商，部分供应商的硬件并没有被完全驱动，因此这里不保证完全可用。硬件供应商驱动情况请参考 [https://wiki.postmarketos.org/wiki/Xiaomi_Redmi_Note_4_(xiaomi-mido)](https://wiki.postmarketos.org/wiki/Xiaomi_Redmi_Note_4_(xiaomi-mido)) 
+This device comes with multiple hardware variants, and some components are not fully supported by available drivers. Therefore, full functionality is not guaranteed. For information about hardware vendor support, see [the postmarketOS Wiki](https://wiki.postmarketos.org/wiki/Xiaomi_Redmi_Note_4_(xiaomi-mido)).
 
-根据 PostmarketOS Wiki 中的描述，搭载 Goodix 触摸屏的设备可能会遇到无法使用触摸的问题，要解决此问题需要使用修改 dts 并重新编译的 lk2nd. 这里提供该修改版本，但是由于我没有设备，所以无法进行测试。
+According to the PostmarketOS Wiki, devices equipped with a Goodix touchscreen may experience touch input issues. Fixing this requires modifying the DTS and recompiling lk2nd. A modified version is provided here, but I cannot test it because I do not have such a device.
 
-如果你希望使用预构建的系统，可以在 [Releases](https://github.com/calico-cat-3333/debian-on-mido/releases) 里下载文件并直接跳到[刷入](https://github.com/calico-cat-3333/debian-on-mido/tree/main#%E5%88%B7%E5%85%A5)一节。
+If you want to use a prebuilt system image, download it from [Releases](https://github.com/calico-cat-3333/debian-on-mido/releases) and skip directly to the [Flashing](https://github.com/calico-cat-3333/debian-on-mido/tree/main#flashing) section.
 
-注意：从 20250915 版本开始提供的预构建的系统将采用新的 extlinux 启动方案而不是 androidboot 方案，因为 extlinux 方案中，内核、initramfs 等文件均放在读写的文件系统中，而不是打包成只读的 boot.img, 因此，更新内核、update-initramfs、编辑启动参数等操作将生效。但是刷写过程将产生区别。
+Note: Starting with the 20250915 release, prebuilt system images use the new extlinux boot method instead of the androidboot method. With extlinux, the kernel, initramfs, and other files are stored on a writable filesystem rather than being packaged into a read-only boot.img. This means that kernel updates, `update-initramfs`, and boot parameter changes will take effect. However, the flashing procedure is different.
 
-## 编译内核
+## Building the kernel
 
-### 准备
+### Preparation
 
-主机安装所需软件包（可能不全）
+Install the required packages on the host system (the list may be incomplete):
 
-```
+```bash
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev
 ```
 
-克隆此储存库
+Clone this repository:
 
-```
+```bash
 git clone https://github.com/calico-cat-3333/debian-on-mido.git
 cd debian-on-mido
 ```
 
-克隆内核源码
+Clone the kernel source:
 
-```
+```bash
 git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 6.16.3/main
 ```
 
-此处使用的 6.16.3/main 分支是本文撰写时最新的分支，如果需要请调整为其他分支。
+The `6.16.3/main` branch was the latest available when this guide was written. Change the branch if necessary.
 
-编译内核，我的配置文件修改自 [https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64?ref_type=heads](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64?ref_type=heads) 主要就是改了一下本地名称，禁用了模块压缩（这个比较重要，开启之后开不了机），开启了 g_serial, 启用 zram 的 lz4 和 lzo 算法支持
+Build the kernel. My configuration is based on [the postmarketOS MSM8953 kernel configuration](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64?ref_type=heads). The main changes are the local version string, disabling module compression (this is particularly important, as enabling it prevents the device from booting), enabling `g_serial`, and enabling the LZ4 and LZO algorithms for zram.
 
-修改后的文件位于 config 中。
+The modified configuration file is located at `config`.
 
-### 执行编译
+### Building
 
-```
+```bash
 cd linux
 source ../env.sh
 cp ../config .config
 make menuconfig
 ```
 
-保存一次
+Save the configuration once, then build:
 
-```
+```bash
 make -j10
 make DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 ```
 
-（这里由于 linux 6.12 内核更改，现在需要 libssl-dev:arm64 才能构建 kernel-headers 所以这里直接不构建 linux-headers 来规避这个问题，具体参考 [https://github.com/msm8953-mainline/linux/commit/e2c318225ac13083cdcb4780cdf5b90edaa8644d](https://github.com/msm8953-mainline/linux/commit/e2c318225ac13083cdcb4780cdf5b90edaa8644d)）
+(Note: Due to changes introduced in Linux 6.12, building kernel headers now requires `libssl-dev:arm64`. To avoid this issue, this guide skips building `linux-headers`. For details, see [this kernel commit](https://github.com/msm8953-mainline/linux/commit/e2c318225ac13083cdcb4780cdf5b90edaa8644d).)
 
-然后在上级文件夹中可以找到生成的 deb 文件
+The generated `.deb` files can be found in the parent directory.
 
-### 准备固件
+### Preparing firmware
 
-此储存库中已经提供了准备完成的固件文件夹，因此下面的步骤无需进行，这里仅记录以供参考。
+This repository already includes a prepared firmware directory, so the following steps are not necessary. They are documented here for reference only.
 
-```
+```bash
 git clone https://github.com/Kiciuk/proprietary_firmware_mido.git
 mkdir -p firmware/qcom/msm8953/xiaomi/mido/
 cp -r proprietary_firmware_mido/apnhlos/* firmware/
@@ -80,54 +81,68 @@ cp -r proprietary_firmware_mido/modem/* firmware/
 mv firmware/a506* firmware/qcom/msm8953/xiaomi/mido/
 ```
 
-更多需要的高通固件将通过后续过程中安装 firmware-qcom-soc 软件包来补充。
+Additional Qualcomm firmware required by the system will be installed later through the `firmware-qcom-soc` package.
 
-// todo: 使用 [msm-firmware-loader](https://gitlab.postmarketos.org/postmarketOS/msm-firmware-loader) 直接从原机分区中获取并加载固件。
+TODO: Use [msm-firmware-loader](https://gitlab.postmarketos.org/postmarketOS/msm-firmware-loader) to retrieve and load firmware directly from the original device partitions.
 
-## 修改并编译 lk2nd
+## Modifying and building lk2nd
 
-默认 lk2nd 在 extlinux 启动方式下仅支持小于 16 MB 的 initramfs 镜像，而安装桌面时引入的 plymouth 会极大的增大 initramfs 的体积，导致启动失败，所以需要修改并重新编译 lk2nd
+By default, lk2nd only supports initramfs images smaller than 16 MB when using extlinux boot. Installing a desktop environment introduces Plymouth, which significantly increases the initramfs size and can cause boot failure. Therefore, lk2nd must be modified and rebuilt.
 
-同时，使用 Goodix 触摸屏的设备还需要修改 lk2nd 的 dts 否则无法触摸。
+Devices equipped with a Goodix touchscreen also require a modification to the lk2nd DTS; otherwise, touch input will not work.
 
-### 准备
+### Preparation
 
-安装环境
+Install the required build dependencies:
 
-```
+```bash
 sudo apt install gcc-arm-none-eabi device-tree-compiler libfdt-dev
 ```
 
-克隆 lk2nd 源代码
+Clone the lk2nd source:
 
-```
+```bash
 git clone https://github.com/msm8916-mainline/lk2nd.git
 cd lk2nd
 ```
 
-### 修改
+### Modifications
 
-编辑 lk2nd/boot/extlinux.c 第 481 行的 `#define MAX_RAMDISK_SIZE		(16 * 1024 * 1024)` 修改为 `#define MAX_RAMDISK_SIZE		(50 * 1024 * 1024)`
+Edit `lk2nd/boot/extlinux.c`. At line 481, change:
 
-注意：这个值不可以随便增大，根据 lk2nd 开发者的说法，在 msm8953 平台上，为内核、dtb 和 initramfs 预留的内存总计最大为 90 MB. 而默认情况下，内核最大占 32 MB, dtb 2 MB, 即 initramfs 不能超过 56 MB.
+`#define MAX_RAMDISK_SIZE        (16 * 1024 * 1024)`
 
-同时，如果您的设备搭载 Goodix 触摸屏，还需要修改 lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts，将 `touchscreen-compatible = "edt,edt-ft5406";` 全部修改为 `touchscreen-compatible = "goodix,gt917d";` 以解决无法触摸的问题。
+to:
 
-### 编译
+`#define MAX_RAMDISK_SIZE        (50 * 1024 * 1024)`
 
-```
+Note: Do not increase this value arbitrarily. According to the lk2nd developers, the MSM8953 platform reserves a maximum of 90 MB of memory in total for the kernel, DTB, and initramfs. By default, the kernel can use up to 32 MB and the DTB up to 2 MB, leaving a maximum initramfs size of 56 MB.
+
+If your device has a Goodix touchscreen, you must also edit `lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts`. Replace every occurrence of:
+
+`touchscreen-compatible = "edt,edt-ft5406";`
+
+with:
+
+`touchscreen-compatible = "goodix,gt917d";`
+
+This fixes the touchscreen input issue.
+
+### Building
+
+```bash
 make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8953
 ```
 
-然后可以在 build-lk2nd-msm8953 文件夹中找到编译出的 lk2nd.img
+The resulting `lk2nd.img` can be found in the `build-lk2nd-msm8953` directory.
 
-## 制作系统
+## Creating the system
 
-### 制作文件系统镜像
+### Creating filesystem images
 
-创建 rootfs.img 并挂载，然后使用 debootstrap 创建基本系统。
+Create `rootfs.img`, format it, mount it, and use debootstrap to install the base system.
 
-```
+```bash
 sudo su
 dd if=/dev/zero of=rootfs.img bs=1G count=3
 mkfs.ext4 rootfs.img
@@ -135,31 +150,30 @@ mkdir test
 mount rootfs.img test
 
 debootstrap --arch arm64 trixie ./test https://mirrors.tuna.tsinghua.edu.cn/debian/
-
-# 或者使用 env.sh 中的函数
+# Alternatively, use the function provided in env.sh
 
 sudo su
 source env.sh
 make_rootfs_img
 ```
 
-创建 bootfs.img 作为启动分区。
+Create `bootfs.img` to serve as the boot partition.
 
-```
+```bash
 sudo su
 dd if=/dev/zero of=bootfs.img bs=1G count=1
 mkfs.ext2 bootfs.img
 
-# 或者使用 env.sh 中的函数
+# Alternatively, use the function provided in env.sh
 
 sudo su
 source env.sh
 make_bootfs_img
 ```
 
-挂载 rootfs
+Mount the root filesystem:
 
-```
+```bash
 sudo su
 mount --bind /proc ./test/proc
 mount --bind /dev ./test/dev
@@ -167,28 +181,28 @@ mount --bind /dev/pts ./test/dev/pts
 mount --bind /sys ./test/sys
 mount bootfs.img ./test/boot
 
-# 或者使用 env.sh 中的函数
+# Alternatively, use the function provided in env.sh
 
 sudo su
 source env.sh
 mount_rootfs
 ```
 
-chroot 进去
+Enter the chroot environment:
 
-```
+```bash
 chroot ./test
 ```
 
-### 基本系统配置
+### Basic system configuration
 
-后续步骤中部分命令需要在 chroot 环境中执行，部分需要在主机环境中执行，请注意代码块开头的描述。
+Some of the following commands must be executed inside the chroot environment, while others must be run on the host system. Pay attention to the descriptions preceding each code block.
 
-在 chroot 中换源，参考[清华源](https://mirrors.tuna.tsinghua.edu.cn/help/debian/)的教程，注意添加 non-free-firmware 源
+Inside the chroot, configure the APT repositories by following the [Tsinghua Debian mirror instructions](https://mirrors.tuna.tsinghua.edu.cn/help/debian/). Make sure to enable the `non-free-firmware` repository component.
 
-在 chroot 中设置 root 密码，设置主机名，设置 hostname, 安装必须软件包:
+Inside the chroot, set the root password and hostname, then install the required packages:
 
-```
+```bash
 passwd root
 echo 'xiaomi-mido' > /etc/hostname
 echo '127.0.0.1 xiaomi-mido' >> /etc/hosts
@@ -196,25 +210,25 @@ apt update
 apt install apt-transport-https ca-certificates micro locales locales-all man man-db bash-completion vim tmux network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf -y
 ```
 
-复制 firmware 到 chroot 中，在主机中执行：
+Copy the firmware into the chroot. Run the following commands on the host system:
 
-```
+```bash
 sudo su
 cp -r firmware/* ./test/lib/firmware/
 ```
 
-将生成的内核 deb 文件复制到 chroot 中，在主机中执行：
+Copy the generated kernel `.deb` files into the chroot. Run the following commands on the host system:
 
-```
+```bash
 sudo su
 cp linux*deb ./test/tmp/
 ```
 
-在 chroot 中安装内核包，使用 `dpkg -i` 命令，注意 deb 中有一个名字里有 dbg 的文件不需要安装。
+Inside the chroot, install the kernel packages using `dpkg -i`. Do not install the `.deb` file whose name contains `dbg`.
 
-编辑 chroot 中的 /etc/initramfs-tools/modules 加入以下内容
+Edit `/etc/initramfs-tools/modules` inside the chroot and add the following entries:
 
-```
+```text
 edt_ft5x06
 goodix_ts
 msm
@@ -225,9 +239,9 @@ panel_xiaomi_otm1911
 panel_xiaomi_tianma_nt35596
 ```
 
-在 chroot 中创建 /etc/initramfs-tools/hooks/mido-fw 并授予可执行权限，内容为
+Inside the chroot, create `/etc/initramfs-tools/hooks/mido-fw` and make it executable. Use the following contents:
 
-```
+```bash
 #!/bin/sh
 PREREQ=""
 prereqs()
@@ -249,13 +263,17 @@ add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b01
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b02
 ```
 
-然后执行 `update-initramfs -u`
+Then run:
 
-### 启动分区配置
-
-配置启动分区，在 chroot 中创建文件 /boot/extlinux/extlinux.conf 内容为：
-
+```bash
+update-initramfs -u
 ```
+
+### Boot partition configuration
+
+Configure the boot partition by creating `/boot/extlinux/extlinux.conf` inside the chroot with the following contents:
+
+```text
 timeout 1
 default Debian
 menu title boot prev kernel
@@ -267,31 +285,31 @@ label Debian
 	append console=tty0 root=UUID=350b96c5-23d6-419f-a377-d2e446190c14 rw loglevel=3 splash
 ```
 
-注意：其中的 kernel initrd 以及 root=UUID 均需要参考 chroot 中 /boot 分区中的文件名和 rootfs.img 的 UUID（可以从 `file rootfs.img` 中获取）不可照抄。并且 kernel 和 initrd 的文件名可能会在更新内核软件包后发生变更，请注意及时更新。
+Note: The `kernel`, `initrd`, and `root=UUID` values must match the actual filenames in the chroot's `/boot` directory and the UUID of `rootfs.img`. You can obtain the UUID using `file rootfs.img`. Do not copy these example values verbatim. The kernel and initrd filenames may also change after a kernel package update, so remember to update this configuration when necessary.
 
-// todo: 使用自动化脚本自动更新 extlinux.conf 和 dtb 文件
+TODO: Use an automated script to update `extlinux.conf` and DTB files automatically.
 
-复制 dtb 文件到 /boot, 在 chroot 中执行：
+Copy the DTB files to `/boot`. Run the following command inside the chroot:
 
-```
+```bash
 cp /usr/lib/linux-image-6.16.3-calicocat-msm8953+/qcom/*mido* /boot
 ```
 
-此命令需要在内核更新后重复执行。
+This command must be repeated after every kernel update.
 
-自动挂载 boot 分区，在 chroot 中在 /etc/fstab 后附加：
+Configure automatic mounting of the boot partition by appending the following line to `/etc/fstab` inside the chroot:
 
-```
+```text
 UUID=f29c8d16-64af-42a3-bdb6-8f2d3b68d374 /boot ext2 defaults 0 2
 ```
 
-此处的 UUID 为 bootfs.img 的 UUID, 可以使用 `file bootfs.img` 获取。
+The UUID here belongs to `bootfs.img`. You can obtain it using `file bootfs.img`.
 
-### 额外优化
+### Additional optimizations
 
-配置启动后自动扩展文件系统，在 chroot 中执行：
+Configure the root filesystem to expand automatically at boot. Run the following commands inside the chroot:
 
-```
+```bash
 cat > /etc/systemd/system/resizefs.service << 'EOF'
 [Unit]
 Description=Expand root filesystem to fill partition
@@ -309,9 +327,9 @@ EOF
 systemctl enable resizefs.service
 ```
 
-开启 USB 串口控制，在 chroot 中执行：
+Enable USB serial console access. Run the following commands inside the chroot:
 
-```
+```bash
 cat > /etc/systemd/system/serial-getty@ttyGS0.service << EOF
 [Unit]
 Description=Serial Console Service on ttyGS0
@@ -326,30 +344,30 @@ RestartSec=0
 WantedBy=multi-user.target
 EOF
 systemctl enable serial-getty@ttyGS0.service
-#如果串口登录失效，可能是g_serial模块没有加载
+# If serial console login stops working, the g_serial module may not have loaded
 echo g_serial >> /etc/modules
 ```
 
-安装 alsa 配置文件，在主机中：
+Install the ALSA configuration files on the host system:
 
-```
+```bash
 git clone https://github.com/msm8953-mainline/alsa-ucm-conf.git
 cp -r alsa-ucm-conf/ucm2/* ./test/usr/share/alsa/ucm2/
 ```
 
-### 结束制作
+### Finishing the system image
 
-清理 chroot 环境，在 chroot 中
+Clean up the chroot environment. Run the following commands inside the chroot:
 
-```
+```bash
 apt clean
 rm -rf /tmp/*
 exit
 ```
 
-退出 chroot 并解除挂载，在主机中
+Exit the chroot and unmount the filesystems on the host system:
 
-```
+```bash
 sudo su
 umount ./test/proc
 umount ./test/dev/pts
@@ -358,80 +376,84 @@ umount ./test/sys
 umount ./test/boot
 umount ./test
 
-# 或者使用 env.sh 中的函数
+# Alternatively, use the function provided in env.sh
 
 sudo su
 source env.sh
 umount_rootfs
 ```
 
-转换刷机包格式
+Convert the images to the format required for flashing:
 
-```
+```bash
 img2simg rootfs.img rootfs-simg.img
 img2simg bootfs.img bootfs-simg.img
 ```
 
-这样就得到了刷机需要的 bootfs-simg.img 和 rootfs-simg.img
+You should now have `bootfs-simg.img` and `rootfs-simg.img`, ready to be flashed.
 
-## 刷入
+## Flashing
 
-建议先刷入第三方 recovery 推荐 TWRP 或者 OrangFox
+It is recommended to flash a custom recovery first. TWRP or OrangeFox is recommended.
 
-进入 recovery 三清
+Boot into recovery and perform a full wipe of the three relevant partitions.
 
-重启到 fastboot
+Reboot into fastboot mode.
 
-```
+```bash
 fastboot erase boot
 fastboot erase system
 fastboot erase userdata
 ```
 
-刷入 lk2nd
+Flash lk2nd:
 
-```
+```bash
 fastboot flash boot lk2nd.img
 ```
 
-然后执行 `fastboot reboot` 重启，将进入 lk2nd 的 fastboot 界面（如果不是是从全新的 lk2nd 开始，需要注意在手机振动一下但是屏幕还没有显示 mi 图标的时候按住音量减键，然后也可以进入 lk2nd fastboot 界面），在此界面下，执行
+Then reboot using `fastboot reboot`. The device should enter the lk2nd fastboot interface.
 
-```
+If this is not a fresh lk2nd installation, you may need to hold the Volume Down button after the phone vibrates but before the Mi logo appears. This should also allow you to enter the lk2nd fastboot interface.
+
+In this interface, run:
+
+```bash
 fastboot flash system bootfs-simg.img
 fastboot flash userdata rootfs-simg.img
 ```
 
-然后 `fastboot reboot` 重启即可完成刷入。
+Finally, run `fastboot reboot` to complete the flashing process.
 
-## 启动系统之后
+## After booting the system
 
-默认开启了 g_serial 可以通过 USB 串口操作，波特率 115200
+`g_serial` is enabled by default, allowing you to access the system through a USB serial connection at 115200 baud.
 
-### 蓝牙 重力感应
+### Bluetooth and accelerometer
 
-蓝牙需要安装 bluez, 能搜索到设备，未测试连接。
+Bluetooth requires the `bluez` package. Device discovery works, but connecting to devices has not been tested.
 
-重力感应和亮度传感器需要安装 iio-sensor-proxy
+The accelerometer and ambient light sensor require `iio-sensor-proxy`.
 
-```
+```bash
 apt install bluez iio-sensor-proxy
 ```
 
-然后可以使用 `monitor-sensor` 命令测试。
+You can then test the sensors using the `monitor-sensor` command.
 
-### 配置语言时区 tty 字体
+### Configuring the language, time zone, and TTY font
 
-```
+```bash
 dpkg-reconfigure locales
 dpkg-reconfigure tzdata
 dpkg-reconfigure console-setup
 ```
 
-建议选 VGA 或者 Terminus 可以选大号字体
+VGA or Terminus fonts are recommended, as they offer larger font sizes.
 
-### 创建新用户
+### Creating a new user
 
-```
+```bash
 adduser user
 usermod -aG sudo user
 usermod -aG audio user
@@ -443,41 +465,39 @@ usermod -aG plugdev user
 usermod -aG bluetooth user
 ```
 
-### 启用 zram
+### Enabling zram
 
-zram 允许将内存的一部分压缩作为 swap 使用。
+Zram compresses a portion of RAM and uses it as swap space.
 
-```
+```bash
 sudo apt install zram-tools
 ```
 
-编辑 /etc/default/zramswap 修改 `ALGO=lz4` 为 `ALGO=zstd`
+Edit `/etc/default/zramswap` and change `ALGO=lz4` to `ALGO=zstd`.
 
-### 安装桌面环境
+### Installing a desktop environment
 
-这里提供了多个桌面环境可供选择：
+Several desktop environments and interfaces are available:
 
-[Phosh](phosh.md) 为手机优化，触屏友好。
+- [Phosh](phosh.md) is optimized for phones and touchscreens.
+- [Xfce4](xfce4.md) provides a traditional desktop experience and is suitable for use with a keyboard and mouse.
+- [BuffyBoard](buffyboard.md) is not strictly a desktop environment; it simply adds a virtual keyboard to the default TTY.
 
-[Xfce4](xfce4.md) 桌面平台操作逻辑，适合搭配键鼠。
+### (Optional) Enabling fast charging
 
-[BuffyBoard](buffyboard.md) 严格上说不算桌面环境，只是在默认 TTY 上加了个虚拟键盘。
+The default charging current is limited to 1 A in the DTB, resulting in relatively slow charging. The charging current can be increased by modifying the DTS.
 
-### （可选）启用快充
+Since lk2nd supports device tree overlays with extlinux, this guide uses a DTBO to override the relevant device tree node without modifying the original DTS.
 
-默认充电速度在 dtb 中限制为 1A, 速度较慢，可以通过修改 dts 提高充电速度。
+Install the device tree compiler:
 
-由于 lk2nd 的 extlinux 支持 device tree overlay 所以这里使用 dtbo 来覆盖设备树节点，无需修改原 dts.
-
-安装 dtc 工具：
-
-```
+```bash
 sudo apt install device-tree-compiler
 ```
 
-创建 fastcharge.dts （这里提升到了 1.6A）
+Create `fastcharge.dts`. The example below increases the charging current to 1.6 A:
 
-```
+```dts
 /dts-v1/;
 /plugin/;
 
@@ -491,29 +511,29 @@ sudo apt install device-tree-compiler
 };
 ```
 
-编译为 dtbo
+Compile it into a DTBO:
 
-```
+```bash
 dtc -I dts -O dtb -o fastcharge.dtbo fastcharge.dts
 ```
 
-复制到 /boot/dtbo
+Copy the file to `/boot/dtbo`:
 
-```
+```bash
 sudo su
 mkdir -p /boot/dtbo
 cp fastcharge.dtbo /boot/dtbo
 ```
 
-编辑 /boot/extlinux/extlinux.conf 在最后添加：
+Edit `/boot/extlinux/extlinux.conf` and append the following line at the end:
 
-```
+```text
 	fdtoverlays /dtbo/fastcharge.dtbo
 ```
 
-编辑完成后，extlinux.conf 应该如下所示：
+After editing, `extlinux.conf` should look like this:
 
-```
+```text
 timeout 1
 default Debian
 menu title boot prev kernel
@@ -526,42 +546,37 @@ label Debian
 	fdtoverlays /dtbo/fastcharge.dtbo
 ```
 
-然后重启，使用 cat /sys/class/power_supply/qcom-smbchg-usb/constant_charge_current_max 应该可以看到输出变为 1600000, 使用 USB 电流表应该也可以看到电流变大。
+Reboot the device. Running the following command should now return `1600000`:
 
-## 未测试/已知问题
+```bash
+cat /sys/class/power_supply/qcom-smbchg-usb/constant_charge_current_max
+```
 
-SIM 卡相关功能未测试
+A USB power meter should also show an increase in charging current.
 
-默认加载 g_serial 会导致 OTG 不可用，故如需使用 OTG 请从 /etc/modules 中注释 g_serial 或在开机前插入 OTG 设备。
+## Untested features and known issues
 
-蓝牙能搜索，不知道能不能用。
+- SIM card functionality has not been tested.
+- Loading `g_serial` by default makes USB OTG unavailable. To use OTG, comment out `g_serial` in `/etc/modules`, or connect the OTG device before booting.
+- Bluetooth device discovery works, but actual functionality has not been confirmed.
+- Charging while powered off is not supported; connecting a charger automatically powers on the device.
+- Battery status and charging status are reported separately. Connecting a charger does not always trigger a charging notification, even though charging is actually taking place. The AC power connection may only become visible after opening the power manager. This behavior is inconsistent.
+- Due to the two issues above, the device cannot remain powered on when the battery is critically low. It triggers an automatic low-battery shutdown, then powers on again when connected to a charger, creating a continuous reboot cycle. The currently recommended workaround is to charge the device in recovery mode when the battery is critically low.
+- ~~Sometimes the battery is not detected. In this case, the device must be fully powered off and then turned on again; a normal reboot does not seem to help. Charging and discharging behavior can also be unstable.~~
+- Charging may stop working correctly after suspend. More precisely, if the device was charging before being suspended, the `upower` service may malfunction after resume, causing Xfce Power Manager to freeze. The battery status then stops updating, making it impossible to determine whether the device is charging. Shutdown or reboot may also hang while terminating the `upower` process. This issue only occurs when the charger is connected before suspending; suspending without charging does not trigger it, and charging remains unaffected after resume in that case. Further testing is needed.
+- The infrared transmitter has not been tested.
+- GPS has not been tested.
 
-不支持关机充电（插电自动开机）。
+## References and acknowledgments
 
-电池和充电状态是分开的（插上电源不会提示正在充电，但是实际上是在充电的，需要打开 powermanager 才会显示交流电源已连接）（时好时坏）
+- postmarketOS
 
-由于上两条：在电量极低的状态下，设备不能保持开机，停触发低电量自动关机，然后由于插电自动开机，会不停处于这个循环中，目前推荐的做法是在电量极低时，进入 recovery 进行充电。
+Aomura_Umeko (Bilibili):
 
-~~有时会不显示电池。遇到这种情况时必须完全关机再开机，重启貌似无效果。充放电有时也不稳定。~~
+- [Build guide](https://gitee.com/meiziyang2023/hm2-ubuntu-ports/blob/master/%E7%BC%96%E8%AF%91%E6%95%99%E7%A8%8B.md)
+- [Ubuntu ports for Xiaomi Snapdragon 625 phones](https://gitee.com/meiziyang2023/ubuntu-ports-xiaomi-625-phones)
+- [KlipperPhonesLinux](https://github.com/umeiko/KlipperPhonesLinux)
 
-挂起后无法充电（确切的说，挂起前如果正在充电，从挂起恢复后 upower 服务会出现异常，导致 xfce power manager 卡死，此时电池状态不更新，也不知道是不是在充电，关机/重启时会卡在结束 upower 进程上）（仅在连接充电器后再挂起才会出现这种情况，不充电时挂起不会，恢复也不影响充电）（有待进一步测试）
+holdmyhand (博客园):
 
-红外发射未测试。
-
-GPS 未测试。
-
-## 参考/鸣谢
-
-postmaketOS
-
-Aomura\_Umeko (bilibili):
-
-[https://gitee.com/meiziyang2023/hm2-ubuntu-ports/blob/master/%E7%BC%96%E8%AF%91%E6%95%99%E7%A8%8B.md](https://gitee.com/meiziyang2023/hm2-ubuntu-ports/blob/master/%E7%BC%96%E8%AF%91%E6%95%99%E7%A8%8B.md) 
-
-[https://gitee.com/meiziyang2023/ubuntu-ports-xiaomi-625-phones](https://gitee.com/meiziyang2023/ubuntu-ports-xiaomi-625-phones) 
-
-[https://github.com/umeiko/KlipperPhonesLinux](https://github.com/umeiko/KlipperPhonesLinux) 
-
-holdmyhand（博客园）:
-
-[https://www.cnblogs.com/holdmyhand/articles/18048158](https://www.cnblogs.com/holdmyhand/articles/18048158)
+- [Original article](https://www.cnblogs.com/holdmyhand/articles/18048158)

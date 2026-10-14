@@ -27,7 +27,7 @@ cd ..
 git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
 cd ./lk2nd-ft
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
-make lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+make -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-focaltech.img
 cd ..
 
@@ -35,9 +35,11 @@ git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-gt
 cd ./lk2nd-gt
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 sed -i 's/touchscreen-compatible = "edt,edt-ft5406";/touchscreen-compatible = "goodix,gt917d";/g' ./lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts
-make lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+make -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-goodix.img
 cd ..
+
+git clone https://gitlab.com/postmarketOS/msm-firmware-loader.git --depth 1
 
 dd if=/dev/zero of=./rootfs.img bs=1G count=3
 mkfs.ext4 -F ./rootfs.img
@@ -62,9 +64,18 @@ $chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y"
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
 
-$chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy modemmanager rmtfs qrtr-tools tqftpserv pipewire pipewire-pulse wireplumber alsa-utils zram-tools curl wget -y"
+$chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install \
+            apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager \
+			openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo \
+			console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy modemmanager rmtfs qrtr-tools \
+			tqftpserv libqmi-utils pipewire pipewire-pulse wireplumber alsa-utils zram-tools curl wget -y"
 $chrootcomm "apt-mark hold alsa-ucm-conf"
 $chrootcomm "systemctl enable rmtfs.service tqftpserv.service ModemManager.service"
+
+sudo install -Dm755 msm-firmware-loader/msm-firmware-loader.sh ./rootfs/usr/sbin/msm-firmware-loader.sh
+sudo install -Dm644 msm-firmware-loader/msm-firmware-loader.service ./rootfs/etc/systemd/system/msm-firmware-loader.service
+sudo install -Dm755 msm-firmware-loader/msm-firmware-loader-unpack.sh ./rootfs/usr/sbin/msm-firmware-loader-unpack.sh
+$chrootcomm "systemctl enable msm-firmware-loader.service"
 
 $chrootcomm "echo 'root:$userpass' | chpasswd"
 $chrootcomm "useradd -m -G sudo -s /bin/bash $username"
@@ -119,7 +130,10 @@ add_firmware qcom/msm8953/xiaomi/mido/a506_zap.elf
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b00
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b01
 add_firmware qcom/msm8953/xiaomi/mido/a506_zap.b02
+copy_file firmware /lib/firmware/qcom/a530_pm4.fw
+copy_file firmware /lib/firmware/qcom/a530_pfp.fw
 EOF
+sudo chmod +x ./rootfs/etc/initramfs-tools/hooks/mido-fw
 $chrootcomm "update-initramfs -u"
 sudo mkdir ./rootfs/boot/extlinux
 KREL=$(ls ./rootfs/lib/modules | sort -V | tail -1)
@@ -132,7 +146,7 @@ label Debian
 	kernel /vmlinuz-$KREL
 	fdtdir /
 	initrd /initrd.img-$KREL
-	append console=tty0 root=UUID=$(blkid -o value -s UUID rootfs.img) rw loglevel=3 splash
+	append console=tty0 root=UUID=$(blkid -o value -s UUID rootfs.img) rw loglevel=3
 	fdtoverlays /dtbo/fastcharge.dtbo
 EOF
 sudo cp ./rootfs/usr/lib/linux-image-$KREL/qcom/*mido* ./rootfs/boot/
@@ -174,7 +188,17 @@ ALGO=zstd
 PERCENT=75
 PRIORITY=100
 EOF
+
+sudo cp ./uim-select ./rootfs/usr/local/sbin/uim-select
+sudo chmod 755 ./rootfs/usr/local/sbin/uim-select
+sudo mkdir -p ./rootfs/etc/systemd/system/ModemManager.service.d
+sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <<EOF
+[Service]
+ExecStartPre=/usr/local/sbin/uim-select
+EOF
+
 $chrootcomm "apt clean && apt autoclean"
+sudo sed -i 's/MODULES=most/MODULES=dep/g' ./rootfs/etc/initramfs-tools/initramfs.conf
 
 sudo tee -a ./rootfs/etc/motd <<'EOF'
 
