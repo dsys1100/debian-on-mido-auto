@@ -197,6 +197,8 @@ img2simg ./rootfs.img ./rootfs-$debver.img
 rm ./rootfs.img
 img2simg ./bootfs.img ./bootfs-$krnver.img
 rm ./bootfs.img
+zip -9 -v "Debian-${{ github.event.inputs.debver }}.${{ github.event.inputs.krnver }}.zip" rootfs-$debver.img bootfs-$krnver.img lk2nd-goodix.img lk2nd-focaltech.img
+rm *.img
 
 tee ./release_body.txt <<EOF
 Kernel version: $krnver
