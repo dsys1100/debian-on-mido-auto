@@ -21,10 +21,8 @@ def qmi(*args):
             text=True,
             timeout=10,
         )
-
         if result.returncode != 0:
             LAST_ERROR = (result.stderr or result.stdout).strip()
-
         return result
 
     except (subprocess.TimeoutExpired, OSError) as exc:
@@ -32,7 +30,9 @@ def qmi(*args):
         return None
 
 def get_usims(output):
+    """Return detected or ready USIM applications, sorted by slot."""
     result = []
+
     slots = re.split(r"(?m)^Slot \[(\d+)\]:", output)
 
     for i in range(1, len(slots), 2):
@@ -42,42 +42,47 @@ def get_usims(output):
         if not re.search(r"Card state:\s*'present'", data):
             continue
 
-        apps = re.split(r"(?m)^\s*Application \[(\d+)\]:", data)
+        apps = re.split(
+            r"(?m)^\s*Application \[(\d+)\]:",
+            data,
+        )
 
         for j in range(1, len(apps), 2):
             app_index = int(apps[j])
             app = apps[j + 1]
 
             if not re.search(
-                r"Application type:\s*'usim\s*\(2\)'",
-                app,
+                r"Application type:\s*'usim\s*\(2\)'", app
             ):
                 continue
 
-            if not re.search(
-                r"Application state:\s*'ready'",
+            state_match = re.search(
+                r"Application state:\s*'(detected|ready)'",
                 app,
-            ):
+            )
+            if not state_match:
                 continue
+
+            state = state_match.group(1)
 
             parts = app.split("Application ID:", 1)
-
             if len(parts) < 2:
                 continue
 
             aid_text = parts[1].split(
-                "Personalization state:",
-                1,
+                "Personalization state:", 1
             )[0]
 
             aid = "".join(
                 re.findall(r"\b[0-9A-Fa-f]{2}\b", aid_text)
-            )
+            ).upper()
 
-            if len(aid) >= 10 and len(aid) % 2 == 0:
-                result.append((slot, app_index, aid.upper()))
+            if len(aid) < 10 or len(aid) % 2:
+                continue
 
-    return sorted(result)
+            result.append((slot, app_index, aid, state))
+
+    return sorted(result, key=lambda item: (item[0], item[1]))
 
 def get_primary_session(output):
     match = re.search(
@@ -91,77 +96,91 @@ def get_primary_session(output):
     return None
 
 def main():
-    print(f"Waiting for modem at {DEVICE}")
+    print(f"Waiting for a usable USIM at {DEVICE}")
 
     for attempt in range(1, ATTEMPTS + 1):
         status = qmi("--uim-get-card-status")
 
         if status and status.returncode == 0:
             usims = get_usims(status.stdout)
+            active = get_primary_session(status.stdout)
 
-            if usims:
-                slot, app_index, aid = usims[0]
+            if not usims:
+                LAST_ERROR = (
+                    "No USIM in detected/ready state with a valid AID."
+                )
+                print(
+                    f"No usable USIM yet ({attempt}/{ATTEMPTS})."
+                )
+
+            else:
+                slot, app_index, aid, app_state = usims[0]
+                target = (slot, app_index)
 
                 print(
-                    f"Found USIM: slot {slot}, "
-                    f"app {app_index}, AID {aid}"
+                    f"USIM: slot {slot}, application {app_index}, "
+                    f"state {app_state}, AID {aid}"
                 )
 
-                if get_primary_session(status.stdout) == (
-                    slot,
-                    app_index,
-                ):
-                    print("The requested USIM is already active.")
+                if active == target and app_state == "ready":
+                    print("Correct USIM is already active.")
                     return 0
 
-                if get_primary_session(status.stdout) is not None:
-                    deactivation = qmi(
-                        "--uim-change-provisioning-session="
-                        "activate=no,"
-                        "session-type=primary-gw-provisioning"
+                if active == target:
+                    print(
+                        "Primary GW is selected; waiting for "
+                        "the application to become ready."
                     )
 
-                    if not deactivation or deactivation.returncode != 0:
+                else:
+                    if active is not None:
                         print(
-                            "Warning: failed to deactivate "
-                            "the previous session."
+                            f"Deactivating previous Primary GW "
+                            f"session {active}."
                         )
 
-                activation = qmi(
-                    "--uim-change-provisioning-session="
-                    "session-type=primary-gw-provisioning,"
-                    f"activate=yes,slot={slot},aid={aid}"
-                )
+                        deactivation = qmi(
+                            "--uim-change-provisioning-session="
+                            "activate=no,"
+                            "session-type=primary-gw-provisioning"
+                        )
 
-                if activation and activation.returncode == 0:
+                        if not deactivation or deactivation.returncode:
+                            print("Could not deactivate previous session.")
+                            if LAST_ERROR:
+                                print(LAST_ERROR)
+                            time.sleep(INTERVAL)
+                            continue
+
                     print(
-                        f"Successfully activated USIM in slot {slot}."
+                        f"Activating USIM in slot {slot}, "
+                        f"application {app_index}."
                     )
-                    return 0
 
-                print("Failed to activate USIM.")
+                    activation = qmi(
+                        "--uim-change-provisioning-session="
+                        "session-type=primary-gw-provisioning,"
+                        f"activate=yes,slot={slot},aid={aid}"
+                    )
 
-                if LAST_ERROR:
-                    print(LAST_ERROR)
+                    if not activation or activation.returncode:
+                        print("Activation failed; will retry.")
+                        if LAST_ERROR:
+                            print(LAST_ERROR)
+                    else:
+                        print("Activation command succeeded; verifying.")
 
-                return 1
+        else:
+            print(f"Modem not ready ({attempt}/{ATTEMPTS}).")
 
-            LAST_ERROR = (
-                "Card status was received, but no ready USIM "
-                "with a valid AID was parsed."
-            )
+        # Verify activation on the next iteration instead of assuming
+        # that a successful QMI command means the session is ready.
+        if attempt < ATTEMPTS:
+            time.sleep(INTERVAL)
 
-        print(
-            f"Modem or USIM not ready "
-            f"({attempt}/{ATTEMPTS})."
-        )
-        time.sleep(INTERVAL)
-
-    print("Timed out waiting for a usable USIM.")
-
+    print("Timed out waiting for a ready, active USIM.")
     if LAST_ERROR:
         print(f"Last error: {LAST_ERROR}")
-
     return 1
 
 if __name__ == "__main__":

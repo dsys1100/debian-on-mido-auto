@@ -57,19 +57,43 @@ sudo mount --bind /dev/pts ./rootfs/dev/pts
 sudo mount --bind /sys ./rootfs/sys
 sudo mount ./bootfs.img ./rootfs/boot
 
-$chrootcomm "echo 'deb https://deb.debian.org/debian/ $debver main contrib non-free non-free-firmware' > /etc/apt/sources.list"
-#$chrootcomm "echo 'deb https://security.debian.org/debian-security $debver-security main contrib non-free non-free-firmware' >> /etc/apt/sources.list"
-$chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y"
+sudo rm -rf ./rootfs/etc/apt/sources.list && sudo rm -rf ./rootfs/etc/apt/sources.list.d/*
+sudo mkdir -p ./rootfs/etc/apt/sources.list.d && sudo cat > ./rootfs/etc/apt/sources.list.d/debian.sources <<EOF
+Types: deb
+URIs: https://deb.debian.org/debian/
+Suites: $debver
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+#sudo cat > /etc/apt/sources.list.d/debian-security.sources <<EOF
+#Types: deb
+#URIs: https://security.debian.org/debian-security/
+#Suites: $debver-security
+#Components: main contrib non-free non-free-firmware
+#Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+#EOF
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://os.b1ack.net/deb/pubkey.asc -o /etc/apt/keyrings/b1ack-repo.asc
+sudo chmod 0644 /etc/apt/keyrings/b1ack-repo.asc
+sudo cat > ./rootfs/etc/apt/sources.list.d/b1ack.sources <<EOF
+Types: deb
+URIs: https://os.b1ack.net/deb/
+Suites: B1ackOS
+Components: main contrib non-free non-free-firmware
+Signed-By: /etc/apt/keyrings/b1ack-repo.asc
+EOF
+$chrootcomm "sudo apt update && sudo apt-mark hold desktop-base b1ack-base grub-theme-b1ack"
+$chrootcomm "apt full-upgrade -y && apt autoremove -y"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
 
 $chrootcomm "/usr/bin/env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true apt install \
             apt-transport-https ca-certificates locales locales-all man-db bash-completion vim network-manager \
-			openssh-server initramfs-tools systemd-timesyncd zstd python3 iptables rfkill usbutils sudo \
+			openssh-server initramfs-tools systemd-timesyncd zstd python-is-python3 iptables rfkill usbutils sudo \
 			console-setup firmware-qcom-soc file alsa-ucm-conf bluez iio-sensor-proxy modemmanager rmtfs qrtr-tools \
-			tqftpserv libqmi-utils pipewire pipewire-pulse wireplumber alsa-utils zram-tools curl wget -y"
-$chrootcomm "apt-mark hold alsa-ucm-conf"
+			tqftpserv libqmi-utils pipewire pipewire-pulse wireplumber alsa-utils zram-tools curl wget fastfetch -y"
+$chrootcomm "apt-mark hold alsa-ucm-conf plymouth"
 $chrootcomm "systemctl enable rmtfs.service tqftpserv.service ModemManager.service"
 
 sudo install -Dm755 msm-firmware-loader/msm-firmware-loader.sh ./rootfs/usr/sbin/msm-firmware-loader.sh
@@ -188,7 +212,6 @@ ALGO=zstd
 PERCENT=75
 PRIORITY=100
 EOF
-
 sudo cp ./uim-select ./rootfs/usr/local/sbin/uim-select
 sudo chmod 755 ./rootfs/usr/local/sbin/uim-select
 sudo mkdir -p ./rootfs/etc/systemd/system/ModemManager.service.d
@@ -196,10 +219,8 @@ sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <
 [Service]
 ExecStartPre=/usr/local/sbin/uim-select
 EOF
-
 $chrootcomm "apt clean && apt autoclean"
 sudo sed -i 's/MODULES=most/MODULES=dep/g' ./rootfs/etc/initramfs-tools/initramfs.conf
-
 sudo tee -a ./rootfs/etc/motd <<'EOF'
 
 Connect to Wi-Fi:
