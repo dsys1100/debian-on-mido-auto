@@ -84,6 +84,12 @@ Suites: B1ackOS
 Components: main contrib non-free non-free-firmware
 Signed-By: /etc/apt/keyrings/b1ack-repo.asc
 EOF
+sudo mkdir -p ./rootfs/etc/apt/preferences.d
+sudo tee ./rootfs/etc/apt/preferences.d/desktop-base > /dev/null <<EOF
+Package: desktop-base
+Pin: release n=B1ackOS
+Pin-Priority: -1
+EOF
 $chrootcomm "apt update && apt-mark hold desktop-base b1ack-base grub-theme-b1ack"
 $chrootcomm "apt full-upgrade -y && apt autoremove -y"
 
