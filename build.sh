@@ -27,7 +27,8 @@ cd ..
 git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
 cd ./lk2nd-ft
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
-make -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+echo Lk2nd-ft building started...
+make -j$(nproc) -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-focaltech.img
 cd ..
 
@@ -35,7 +36,8 @@ git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-gt
 cd ./lk2nd-gt
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 sed -i 's/touchscreen-compatible = "edt,edt-ft5406";/touchscreen-compatible = "goodix,gt917d";/g' ./lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts
-make -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+echo Lk2nd-gt building started...
+make -j$(nproc) -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-goodix.img
 cd ..
 
@@ -58,24 +60,24 @@ sudo mount --bind /sys ./rootfs/sys
 sudo mount ./bootfs.img ./rootfs/boot
 
 sudo rm -rf ./rootfs/etc/apt/sources.list && sudo rm -rf ./rootfs/etc/apt/sources.list.d/*
-sudo mkdir -p ./rootfs/etc/apt/sources.list.d && sudo cat > ./rootfs/etc/apt/sources.list.d/debian.sources <<EOF
+sudo mkdir -p ./rootfs/etc/apt/sources.list.d && sudo tee ./rootfs/etc/apt/sources.list.d/debian.sources > /dev/null <<EOF
 Types: deb
 URIs: https://deb.debian.org/debian/
 Suites: $debver
 Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
-#sudo cat > /etc/apt/sources.list.d/debian-security.sources <<EOF
+#sudo tee /etc/apt/sources.list.d/debian-security.sources > /dev/null <<EOF
 #Types: deb
 #URIs: https://security.debian.org/debian-security/
 #Suites: $debver-security
 #Components: main contrib non-free non-free-firmware
 #Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 #EOF
-sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL https://os.b1ack.net/deb/pubkey.asc -o /etc/apt/keyrings/b1ack-repo.asc
-sudo chmod 0644 /etc/apt/keyrings/b1ack-repo.asc
-sudo cat > ./rootfs/etc/apt/sources.list.d/b1ack.sources <<EOF
+$chrootcomm "sudo install -d -m 0755 /etc/apt/keyrings"
+sudo curl -fsSL https://os.b1ack.net/deb/pubkey.asc -o ./rootfs/etc/apt/keyrings/b1ack-repo.asc
+sudo chmod 0644 ./rootfs/etc/apt/keyrings/b1ack-repo.asc
+sudo tee ./rootfs/etc/apt/sources.list.d/b1ack.sources > /dev/null <<EOF
 Types: deb
 URIs: https://os.b1ack.net/deb/
 Suites: B1ackOS
