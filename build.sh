@@ -21,7 +21,7 @@ wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/57cff102e1716bd
 make olddefconfig
 echo Linux Kernel building started...
 make -j$(nproc) -s
-make -s DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
+make -j$(nproc) -s DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 
 git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
@@ -74,7 +74,7 @@ EOF
 #Components: main contrib non-free non-free-firmware
 #Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 #EOF
-$chrootcomm "sudo install -d -m 0755 /etc/apt/keyrings"
+$chrootcomm "install -d -m 0755 /etc/apt/keyrings"
 sudo curl -fsSL https://os.b1ack.net/deb/pubkey.asc -o ./rootfs/etc/apt/keyrings/b1ack-repo.asc
 sudo chmod 0644 ./rootfs/etc/apt/keyrings/b1ack-repo.asc
 sudo tee ./rootfs/etc/apt/sources.list.d/b1ack.sources > /dev/null <<EOF
@@ -84,7 +84,7 @@ Suites: B1ackOS
 Components: main contrib non-free non-free-firmware
 Signed-By: /etc/apt/keyrings/b1ack-repo.asc
 EOF
-$chrootcomm "sudo apt update && sudo apt-mark hold desktop-base b1ack-base grub-theme-b1ack"
+$chrootcomm "apt update && apt-mark hold desktop-base b1ack-base grub-theme-b1ack"
 $chrootcomm "apt full-upgrade -y && apt autoremove -y"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
