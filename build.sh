@@ -28,7 +28,7 @@ git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
 cd ./lk2nd-ft
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 echo Lk2nd-ft building started...
-make -j$(nproc) -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+make -j$(nproc) --silent lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-focaltech.img
 cd ..
 
@@ -37,7 +37,7 @@ cd ./lk2nd-gt
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 sed -i 's/touchscreen-compatible = "edt,edt-ft5406";/touchscreen-compatible = "goodix,gt917d";/g' ./lk2nd/device/dts/msm8953/msm8953-xiaomi-common.dts
 echo Lk2nd-gt building started...
-make -j$(nproc) -s lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
+make -j$(nproc) --silent lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
 mv ./build-lk2nd-msm8953/lk2nd.img ../lk2nd-goodix.img
 cd ..
 
@@ -90,8 +90,7 @@ Package: desktop-base
 Pin: release n=B1ackOS
 Pin-Priority: -1
 EOF
-$chrootcomm "apt update && apt-mark hold desktop-base b1ack-base grub-theme-b1ack"
-$chrootcomm "apt full-upgrade -y && apt autoremove -y"
+$chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
@@ -132,7 +131,7 @@ rm *-dbg_*.deb
 sudo cp linux*deb ./rootfs/tmp/
 $chrootcomm "apt install -y /tmp/*.deb"
 sudo rm ./rootfs/tmp/*
-sudo tee -a ./rootfs/etc/initramfs-tools/modules <<EOF
+sudo tee -a ./rootfs/etc/initramfs-tools/modules > /dev/null <<EOF
 edt_ft5x06
 goodix_ts
 msm
@@ -142,7 +141,7 @@ panel_xiaomi_nt35532
 panel_xiaomi_otm1911
 panel_xiaomi_tianma_nt35596
 EOF
-sudo tee ./rootfs/etc/initramfs-tools/hooks/mido-fw <<'EOF'
+sudo tee ./rootfs/etc/initramfs-tools/hooks/mido-fw > /dev/null <<'EOF'
 #!/bin/sh
 PREREQ=""
 prereqs()
@@ -169,7 +168,7 @@ sudo chmod +x ./rootfs/etc/initramfs-tools/hooks/mido-fw
 $chrootcomm "update-initramfs -u"
 sudo mkdir ./rootfs/boot/extlinux
 KREL=$(ls ./rootfs/lib/modules | sort -V | tail -1)
-sudo tee ./rootfs/boot/extlinux/extlinux.conf <<EOF
+sudo tee ./rootfs/boot/extlinux/extlinux.conf > /dev/null <<EOF
 timeout 0
 default Debian
 menu title boot prev kernel
@@ -183,7 +182,7 @@ label Debian
 EOF
 sudo cp ./rootfs/usr/lib/linux-image-$KREL/qcom/*mido* ./rootfs/boot/
 sudo sh -c "echo 'UUID=$(blkid -o value -s UUID bootfs.img) /boot ext2 defaults 0 2' > ./rootfs/etc/fstab"
-sudo tee ./rootfs/etc/systemd/system/resizefs.service <<'EOF'
+sudo tee ./rootfs/etc/systemd/system/resizefs.service > /dev/null <<'EOF'
 [Unit]
 Description=Expand root filesystem to fill partition
 After=local-fs.target
@@ -198,7 +197,7 @@ RemainAfterExit=true
 WantedBy=default.target
 EOF
 $chrootcomm "systemctl enable resizefs.service"
-sudo tee ./rootfs/etc/systemd/system/serial-getty@ttyGS0.service <<EOF
+sudo tee ./rootfs/etc/systemd/system/serial-getty@ttyGS0.service > /dev/null <<EOF
 [Unit]
 Description=Serial Console Service on ttyGS0
 
@@ -227,9 +226,9 @@ sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <
 [Service]
 ExecStartPre=/usr/local/sbin/uim-select
 EOF
-$chrootcomm "apt clean && apt autoclean"
+$chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y && apt clean && apt autoclean"
 sudo sed -i 's/MODULES=most/MODULES=dep/g' ./rootfs/etc/initramfs-tools/initramfs.conf
-sudo tee -a ./rootfs/etc/motd <<'EOF'
+sudo tee -a ./rootfs/etc/motd > /dev/null <<'EOF'
 
 Connect to Wi-Fi:
 sudo nmcli dev wifi connect "SSID" password "PASSWORD"
@@ -253,7 +252,7 @@ rm ./bootfs.img
 zip -9 -v "Debian-$debver.$krnver.zip" rootfs-$debver.img bootfs-$krnver.img lk2nd-goodix.img lk2nd-focaltech.img
 rm *.img
 
-tee ./release_body.txt <<EOF
+tee ./release_body.txt > /dev/null <<EOF
 Kernel version: $krnver
 Debian version: $debver
 Username: $username
