@@ -8,13 +8,13 @@ Original readme translated to English:
 
 An attempt to port Debian Linux to the Qualcomm version of the Xiaomi Redmi Note 4X (mido).
 
-This phone is supported by postmarketOS. The port is based on the pmos kernel and draws on existing tutorials available online.
+This phone is supported by Nura (ex postmarketOS). The port is based on the Nura kernel and draws on existing tutorials available online.
 
-This device comes with multiple hardware variants, and some components are not fully supported by available drivers. Therefore, full functionality is not guaranteed. For information about hardware vendor support, see [the postmarketOS Wiki](https://wiki.postmarketos.org/wiki/Xiaomi_Redmi_Note_4_(xiaomi-mido)).
+This device comes with multiple hardware variants, and some components are not fully supported by available drivers. Therefore, full functionality is not guaranteed. For information about hardware vendor support, see [Nura Wiki](https://wiki.nura.eco/wiki/Xiaomi_Redmi_Note_4_(xiaomi-mido)).
 
-According to the PostmarketOS Wiki, devices equipped with a Goodix touchscreen may experience touch input issues. Fixing this requires modifying the DTS and recompiling lk2nd. A modified version is provided here, but I cannot test it because I do not have such a device.
+According to the Nura Wiki, devices equipped with a Goodix touchscreen may experience touch input issues. Fixing this requires modifying the DTS and recompiling lk2nd. A modified version is provided here, but I cannot test it because I do not have such a device.
 
-If you want to use a prebuilt system image, download it from [Releases](https://github.com/calico-cat-3333/debian-on-mido/releases) and skip directly to the [Flashing](https://github.com/calico-cat-3333/debian-on-mido/tree/main#flashing) section.
+If you want to use a prebuilt system image, download it from [Releases](https://github.com/dsys1100/debian-on-mido-auto/releases) and skip directly to the [Flashing](https://github.com/dsys1100/debian-on-mido-auto/tree/main#flashing) section.
 
 Note: Starting with the 20250915 release, prebuilt system images use the new extlinux boot method instead of the androidboot method. With extlinux, the kernel, initramfs, and other files are stored on a writable filesystem rather than being packaged into a read-only boot.img. This means that kernel updates, `update-initramfs`, and boot parameter changes will take effect. However, the flashing procedure is different.
 
@@ -31,40 +31,40 @@ sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex g
 Clone this repository:
 
 ```bash
-git clone https://github.com/calico-cat-3333/debian-on-mido.git
-cd debian-on-mido
+git clone https://github.com/dsys1100/debian-on-mido-auto.git
+cd debian-on-mido-auto
 ```
 
 Clone the kernel source:
 
 ```bash
-git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 6.16.3/main
+git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b 7.1.3/main
 ```
 
-The `6.16.3/main` branch was the latest available when this guide was written. Change the branch if necessary.
+The `7.1.3/main` branch was the latest available when this guide was written. Change the branch if necessary.
 
-Build the kernel. My configuration is based on [the postmarketOS MSM8953 kernel configuration](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/blob/master/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64?ref_type=heads). The main changes are the local version string, disabling module compression (this is particularly important, as enabling it prevents the device from booting), enabling `g_serial`, and enabling the LZ4 and LZO algorithms for zram.
-
-The modified configuration file is located at `config`.
+Build the kernel with [Nura MSM8953 kernel configuration](https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/57cff102e1716bd87e7236146581d61dc8d76b23/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64), recommended to use a config of the same version as the kernel.
 
 ### Building
 
 ```bash
 cd linux
-source ../env.sh
-cp ../config .config
-make menuconfig
+export CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64 CC=aarch64-linux-gnu-gcc
+wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/57cff102e1716bd87e7236146581d61dc8d76b23/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64 -O .config
+make olddefconfig
 ```
 
 Save the configuration once, then build:
 
 ```bash
-make -j10
-make DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
+make -j$(nproc)
+make -j$(nproc) DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 ```
 
 (Note: Due to changes introduced in Linux 6.12, building kernel headers now requires `libssl-dev:arm64`. To avoid this issue, this guide skips building `linux-headers`. For details, see [this kernel commit](https://github.com/msm8953-mainline/linux/commit/e2c318225ac13083cdcb4780cdf5b90edaa8644d).)
+
+(Note 2: on Debian you can build kernel with headers by adding arm64 arch and installing gcc-aarch64-linux-gnu + libssl-dev:arm64 - `make -j$(nproc) bindeb-pkg`)
 
 The generated `.deb` files can be found in the parent directory.
 
@@ -83,13 +83,15 @@ mv firmware/a506* firmware/qcom/msm8953/xiaomi/mido/
 
 Additional Qualcomm firmware required by the system will be installed later through the `firmware-qcom-soc` package.
 
-TODO: Use [msm-firmware-loader](https://gitlab.postmarketos.org/postmarketOS/msm-firmware-loader) to retrieve and load firmware directly from the original device partitions.
+Now used [msm-firmware-loader](https://gitlab.postmarketos.org/postmarketOS/msm-firmware-loader) to retrieve and load firmware directly from the original device partitions, but I don't rule out the possibility that THESE firmware files might be needed in addition to the ones extracted from the phone itself.
 
 ## Modifying and building lk2nd
 
 By default, lk2nd only supports initramfs images smaller than 16 MB when using extlinux boot. Installing a desktop environment introduces Plymouth, which significantly increases the initramfs size and can cause boot failure. Therefore, lk2nd must be modified and rebuilt.
 
-Devices equipped with a Goodix touchscreen also require a modification to the lk2nd DTS; otherwise, touch input will not work.
+Devices equipped with a Goodix touchscreen also require a modification to the lk2nd DTS; otherwise, touch input will not work. This repo builds lk2nd for both variants - flash corresponding.
+
+Plymouth is currently disabled via `apt-mark hold`, and attempts are being made to merge the rootfs and bootfs.
 
 ### Preparation
 
@@ -136,7 +138,7 @@ make TOOLCHAIN_PREFIX=arm-none-eabi- lk2nd-msm8953
 
 The resulting `lk2nd.img` can be found in the `build-lk2nd-msm8953` directory.
 
-## Creating the system
+## Creating the system - WIP, old info, needs update
 
 ### Creating filesystem images
 
@@ -406,26 +408,17 @@ fastboot erase system
 fastboot erase userdata
 ```
 
-Flash lk2nd:
+Flash port:
 
 ```bash
 fastboot flash boot lk2nd.img
-```
-
-Then reboot using `fastboot reboot`. The device should enter the lk2nd fastboot interface.
-
-If this is not a fresh lk2nd installation, you may need to hold the Volume Down button after the phone vibrates but before the Mi logo appears. This should also allow you to enter the lk2nd fastboot interface.
-
-In this interface, run:
-
-```bash
 fastboot flash system bootfs-simg.img
 fastboot flash userdata rootfs-simg.img
 ```
 
 Finally, run `fastboot reboot` to complete the flashing process.
 
-## After booting the system
+## After booting the system - remove this later
 
 `g_serial` is enabled by default, allowing you to access the system through a USB serial connection at 115200 baud.
 
@@ -455,14 +448,7 @@ VGA or Terminus fonts are recommended, as they offer larger font sizes.
 
 ```bash
 adduser user
-usermod -aG sudo user
-usermod -aG audio user
-usermod -aG video user
-usermod -aG render user
-usermod -aG input user
-usermod -aG netdev user
-usermod -aG plugdev user
-usermod -aG bluetooth user
+usermod -aG sudo,audio,video,render,input,netdev,plugdev,bluetooth user
 ```
 
 ### Enabling zram
@@ -479,9 +465,10 @@ Edit `/etc/default/zramswap` and change `ALGO=lz4` to `ALGO=zstd`.
 
 Several desktop environments and interfaces are available:
 
-- [Phosh](phosh.md) is optimized for phones and touchscreens.
-- [Xfce4](xfce4.md) provides a traditional desktop experience and is suitable for use with a keyboard and mouse.
-- [BuffyBoard](buffyboard.md) is not strictly a desktop environment; it simply adds a virtual keyboard to the default TTY.
+- Phosh is optimized for phones and touchscreens (`sudo apt update && sudo apt install phosh phosh-phone gdm3 -y` and select `gdm3` for Display Manager).
+- Plasma Mobile is optimized for phones and touchscreens, but slightly laggy (`sudo apt update && sudo apt install plasma-mobile` and maybe sddm, i forget).
+- Xfce4 provides a traditional desktop experience and is suitable for use with a keyboard and mouse or stylus.
+- BuffyBoard is not strictly a desktop environment; it simply adds a virtual keyboard to the default TTY.
 
 ### (Optional) Enabling fast charging
 
@@ -554,14 +541,17 @@ cat /sys/class/power_supply/qcom-smbchg-usb/constant_charge_current_max
 
 A USB power meter should also show an increase in charging current.
 
+And this already included in my builds.
+
 ## Untested features and known issues
 
-- SIM card functionality has not been tested.
-- Loading `g_serial` by default makes USB OTG unavailable. To use OTG, comment out `g_serial` in `/etc/modules`, or connect the OTG device before booting.
+- Suspend may not work - phone not wakeup after suspend.
+- SIM card functionality has been tested - it works, but only one SIM, needs rework or port sim selector from Nura.
+- OTG Works, old text: Loading `g_serial` by default makes USB OTG unavailable. To use OTG, comment out `g_serial` in `/etc/modules`, or connect the OTG device before booting.
 - Bluetooth device discovery works, but actual functionality has not been confirmed.
 - Charging while powered off is not supported; connecting a charger automatically powers on the device.
 - Battery status and charging status are reported separately. Connecting a charger does not always trigger a charging notification, even though charging is actually taking place. The AC power connection may only become visible after opening the power manager. This behavior is inconsistent.
-- Due to the two issues above, the device cannot remain powered on when the battery is critically low. It triggers an automatic low-battery shutdown, then powers on again when connected to a charger, creating a continuous reboot cycle. The currently recommended workaround is to charge the device in recovery mode when the battery is critically low.
+- Due to the two issues above, the device cannot remain powered on when the battery is critically low. It triggers an automatic low-battery shutdown, then powers on again when connected to a charger, creating a continuous reboot cycle. The currently recommended workaround is to charge the device in recovery/fastboot mode when the battery is critically low.
 - ~~Sometimes the battery is not detected. In this case, the device must be fully powered off and then turned on again; a normal reboot does not seem to help. Charging and discharging behavior can also be unstable.~~
 - Charging may stop working correctly after suspend. More precisely, if the device was charging before being suspended, the `upower` service may malfunction after resume, causing Xfce Power Manager to freeze. The battery status then stops updating, making it impossible to determine whether the device is charging. Shutdown or reboot may also hang while terminating the `upower` process. This issue only occurs when the charger is connected before suspending; suspending without charging does not trigger it, and charging remains unaffected after resume in that case. Further testing is needed.
 - The infrared transmitter has not been tested.
@@ -569,7 +559,8 @@ A USB power meter should also show an increase in charging current.
 
 ## References and acknowledgments
 
-- postmarketOS
+- Nura (ex postmarketOS)
+- calico-cat-3333
 
 Aomura_Umeko (Bilibili):
 
