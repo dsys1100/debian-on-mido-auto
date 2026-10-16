@@ -5,6 +5,10 @@ on:
   push: # Autorun after commits
     branches:
       - test
+    paths-ignore:
+      - 'README.md'
+      - '**/README.md'
+      - '**/*.yml'
 
 permissions:
   contents: write # Give permission to put the release into the repo
