@@ -1,6 +1,8 @@
 #!/bin/sh
 
-sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
+sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config \
+     libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev \
+     build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
 export krnver=7.1.3
 export debver=sid
@@ -8,24 +10,19 @@ export username=user
 export userpass=000
 export hostname=mido
 export "chrootcomm=sudo chroot ./rootfs /bin/bash -c"
-
-#git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
-git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b $krnver/main
-
 export CROSS_COMPILE=aarch64-linux-gnu-
 export ARCH=arm64
 export CC=aarch64-linux-gnu-gcc
 
-cd linux
+#git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
+git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b $krnver/main && cd linux
 wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/57cff102e1716bd87e7236146581d61dc8d76b23/device/community/linux-postmarketos-qcom-msm8953/config-postmarketos-qcom-msm8953.aarch64 -O .config
-make olddefconfig
 echo Linux Kernel building started...
-make -j$(nproc) -s
+make -s olddefconfig && make -j$(nproc) -s
 make -j$(nproc) -s DEB_BUILD_PROFILES=pkg.linux-upstream.nokernelheaders bindeb-pkg
 cd ..
 
-git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft
-cd ./lk2nd-ft
+git clone https://github.com/msm8916-mainline/lk2nd.git --depth 1 ./lk2nd-ft && cd ./lk2nd-ft
 sed -i 's/#define MAX_RAMDISK_SIZE.*/#define MAX_RAMDISK_SIZE\t\t(50 * 1024 * 1024)/' ./lk2nd/boot/extlinux.c
 echo Lk2nd-ft building started...
 make -j$(nproc) --silent lk2nd-msm8953 TOOLCHAIN_PREFIX=arm-none-eabi-
@@ -43,15 +40,12 @@ cd ..
 
 git clone https://gitlab.com/postmarketOS/msm-firmware-loader.git --depth 1
 
-dd if=/dev/zero of=./rootfs.img bs=1G count=3
-mkfs.ext4 -F ./rootfs.img
-mkdir ./rootfs
-sudo mount ./rootfs.img ./rootfs
+dd if=/dev/zero of=./rootfs.img bs=1G count=3 && mkfs.ext4 -F ./rootfs.img
+mkdir ./rootfs && sudo mount ./rootfs.img ./rootfs
 
 sudo debootstrap --arch arm64 $debver ./rootfs https://deb.debian.org/debian/
 
-dd if=/dev/zero of=./bootfs.img bs=1G count=1
-mkfs.ext2 bootfs.img
+dd if=/dev/zero of=./bootfs.img bs=1G count=1 && mkfs.ext2 bootfs.img
 
 sudo mount --bind /proc ./rootfs/proc
 sudo mount --bind /dev ./rootfs/dev
@@ -123,14 +117,11 @@ $chrootcomm "usermod -aG plugdev $username"
 $chrootcomm "usermod -aG bluetooth $username"
 
 dtc -I dts -O dtb -o ./fastcharge.dtbo ./fastcharge.dts
-sudo mkdir ./rootfs/boot/dtbo
-sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
+sudo mkdir ./rootfs/boot/dtbo && sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
 
 sudo cp -r ./firmware/* ./rootfs/lib/firmware/
-rm *-dbg_*.deb
-sudo cp linux*deb ./rootfs/tmp/
-$chrootcomm "apt install -y /tmp/*.deb"
-sudo rm ./rootfs/tmp/*
+rm *-dbg_*.deb && sudo cp linux*deb ./rootfs/tmp/
+$chrootcomm "apt install -y /tmp/*.deb" && sudo rm ./rootfs/tmp/*
 sudo tee -a ./rootfs/etc/initramfs-tools/modules > /dev/null <<EOF
 edt_ft5x06
 goodix_ts
@@ -219,8 +210,7 @@ ALGO=zstd
 PERCENT=75
 PRIORITY=100
 EOF
-sudo cp ./uim-select ./rootfs/usr/local/sbin/uim-select
-sudo chmod 755 ./rootfs/usr/local/sbin/uim-select
+sudo install -Dm755 ./uim-select ./rootfs/usr/local/sbin/uim-select
 sudo mkdir -p ./rootfs/etc/systemd/system/ModemManager.service.d
 sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <<EOF
 [Service]
@@ -234,7 +224,7 @@ Connect to Wi-Fi:
 sudo nmcli dev wifi connect "SSID" password "PASSWORD"
 
 Setup font and size in TTY:
-dpkg-reconfigure console-setup
+sudo dpkg-reconfigure console-setup
 
 EOF
 
@@ -245,10 +235,8 @@ sudo umount ./rootfs/sys
 sudo umount ./rootfs/boot
 sudo umount ./rootfs
 
-img2simg ./rootfs.img ./rootfs-$debver.img
-rm ./rootfs.img
-img2simg ./bootfs.img ./bootfs-$krnver.img
-rm ./bootfs.img
+img2simg ./rootfs.img ./rootfs-$debver.img && rm ./rootfs.img
+img2simg ./bootfs.img ./bootfs-$krnver.img && rm ./bootfs.img
 zip -9 -v "Debian-$debver.$krnver.zip" rootfs-$debver.img bootfs-$krnver.img lk2nd-goodix.img lk2nd-focaltech.img
 rm *.img
 
