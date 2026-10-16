@@ -1,10 +1,10 @@
-name: Build
+name: Testing
 
 on:
   workflow_dispatch: {} # Enables the manual start
   push: # Autorun after commits
     branches:
-      - main
+      - test
 
 permissions:
   contents: write # Give permission to put the release into the repo
@@ -50,7 +50,7 @@ jobs:
           tag_name: ${{ steps.vars.outputs.tag_name }}
           name: ${{ steps.vars.outputs.tag_name }}
           draft: false
-          prerelease: false
+          prerelease: true
           body_path: release_body.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
