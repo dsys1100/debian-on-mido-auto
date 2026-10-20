@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 
 sudo apt install binfmt-support qemu-user qemu-user-binfmt fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config \
      libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev \
-     build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
+     build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev wget curl -y
 
 export krnver=7.1.3 debver=sid hostname=mido username=user userpass=000
 export "chrootcomm=sudo chroot ./rootfs /bin/bash -c"
@@ -78,8 +78,7 @@ Package: desktop-base
 Pin: release n=B1ackOS
 Pin-Priority: -1
 EOF
-sudo rm ./rootfs/var/lib/man-db/auto-update
-$chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack"
+$chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack man-db"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
