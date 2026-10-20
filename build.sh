@@ -1,6 +1,6 @@
 #!/bin/sh
 
-sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config \
+sudo apt install binfmt-support qemu-user qemu-user-binfmt fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config \
      libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev \
      build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
 
