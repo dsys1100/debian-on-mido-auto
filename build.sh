@@ -109,6 +109,7 @@ sudo mkdir ./rootfs/boot/dtbo && sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
 sudo cp -r ./firmware/* ./rootfs/lib/firmware/
 rm *-dbg_*.deb && sudo cp linux*deb ./rootfs/tmp/
 $chrootcomm "apt install -y /tmp/*.deb" && sudo rm ./rootfs/tmp/*
+sudo mkdir -p ./rootfs/etc/initramfs-tools/
 sudo tee -a ./rootfs/etc/initramfs-tools/modules > /dev/null <<EOF
 edt_ft5x06
 goodix_ts
@@ -119,6 +120,7 @@ panel_xiaomi_nt35532
 panel_xiaomi_otm1911
 panel_xiaomi_tianma_nt35596
 EOF
+sudo mkdir -p ./rootfs/etc/initramfs-tools/hooks
 sudo tee ./rootfs/etc/initramfs-tools/hooks/mido-fw > /dev/null <<'EOF'
 #!/bin/sh
 PREREQ=""
