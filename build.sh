@@ -107,7 +107,7 @@ dtc -I dts -O dtb -o ./fastcharge.dtbo ./fastcharge.dts
 sudo mkdir ./rootfs/boot/dtbo && sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
 
 sudo cp -r ./firmware/* ./rootfs/lib/firmware/
-rm *-dbg_*.deb && sudo cp linux*deb ./rootfs/tmp/
+rm *-dbg_*.deb && cp linux*deb ./rootfs/tmp/
 $chrootcomm "apt install -y /tmp/*.deb" && sudo rm ./rootfs/tmp/*
 sudo mkdir -p ./rootfs/etc/initramfs-tools/
 sudo tee -a ./rootfs/etc/initramfs-tools/modules > /dev/null <<EOF
@@ -220,10 +220,9 @@ sudo tee -a ./rootfs/etc/motd > /dev/null <<'EOF'
 Connect to Wi-Fi:
 sudo nmcli dev wifi connect "SSID" password "PASSWORD"
 
-Setup font and size in TTY:
-sudo dpkg-reconfigure console-setup
-
 EOF
+sudo sed -i 's/Fixed/VGA/g' ./rootfs/etc/default/console-setup
+sudo sed -i 's/8x16/16x32/g' ./rootfs/etc/default/console-setup
 
 sudo umount ./rootfs/proc
 sudo umount ./rootfs/dev/pts
