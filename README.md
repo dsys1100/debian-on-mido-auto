@@ -1,6 +1,4 @@
 # fork Readme WIP
-It is a base image; no tweaks are included for now.  
-Original readme translated to English:
 
 -----
 

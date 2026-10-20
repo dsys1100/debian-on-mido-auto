@@ -78,6 +78,7 @@ Package: desktop-base
 Pin: release n=B1ackOS
 Pin-Priority: -1
 EOF
+sudo rm ./rootfs/var/lib/man-db/auto-update
 $chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
@@ -204,6 +205,14 @@ sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <
 ExecStartPre=/usr/local/sbin/uim-select
 EOF
 $chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y && apt clean && apt autoclean"
+
+sudo mkdir -p ./rootfs/etc/profile.d
+sudo wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/6c1ac7813870a72011f3adda4d79178330e8c7c0/device/community/soc-qcom-msm8953/adreno-a506-quirks.sh -O ./rootfs/etc/profile.d/adreno-a506-quirks.sh
+sudo mkdir -p ./rootfs/etc/systemd/system.conf.d
+sudo tee ./rootfs/etc/systemd/system.conf.d/stop-timeout.conf >/dev/null <<EOF
+[Manager]
+DefaultTimeoutStopSec=15s
+EOF
 sudo sed -i 's/MODULES=most/MODULES=dep/g' ./rootfs/etc/initramfs-tools/initramfs.conf
 sudo tee -a ./rootfs/etc/motd > /dev/null <<'EOF'
 
