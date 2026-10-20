@@ -5,27 +5,34 @@ on:
   push: # Autorun after commits
     branches:
       - main
+    paths-ignore:
+      - 'README.md'
+      - '**/README.md'
 
 permissions:
   contents: write # Give permission to put the release into the repo
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-          sudo rm -rf /usr/share/swift /usr/local/graalvm /usr/local/.ghcup
-          sudo rm -rf /opt/hostedtoolcache /opt/az /usr/share/az_* /usr/local/julia*
-          sudo rm -rf /usr/local/share/powershell /usr/share/miniconda /usr/lib/jvm
-          sudo rm -rf /usr/share/kotlinc /usr/share/gradle* /usr/share/sbt
-          sudo rm -rf /usr/local/share/vcpkg /usr/local/share/chromium
-          sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' azure-cli google-cloud-sdk google-chrome-stable firefox mono-devel '^temurin-.*' '^mysql-.*' '^postgresql-.*' || true
-          sudo apt-get autoremove -y && sudo apt-get clean && sudo apt-get autoclean
+      - name: Free Disk Space
+        uses: endersonmenezes/free-disk-space@v4  # Use @main for latest, @v4 for stable
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+          remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-* snapd"
+          remove_packages_one_command: true
+          remove_folders: "/usr/share/az* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle /opt/pipx"
+          rm_cmd: "rmz"  # Use 'rmz' for faster deletion (default: 'rm')
+          rmz_version: "3.2.0"  # Required when rm_cmd is 'rmz'
+          testing: false
 
       - name: Build
         run: |

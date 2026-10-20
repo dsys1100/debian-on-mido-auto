@@ -2,17 +2,11 @@
 
 sudo apt install binfmt-support qemu-user-static fakeroot mkbootimg bison flex gcc-aarch64-linux-gnu pkg-config \
      libncurses-dev libssl-dev unzip git debootstrap android-sdk-libsparse-utils adb fastboot libssl-dev libdw-dev \
-     build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev -y
+     build-essential bc debhelper-compat rsync gcc-arm-none-eabi device-tree-compiler libfdt-dev wget curl -y
 
-export krnver=7.1.3
-export debver=sid
-export username=user
-export userpass=000
-export hostname=mido
+export krnver=7.1.3 debver=sid hostname=mido username=user userpass=000
 export "chrootcomm=sudo chroot ./rootfs /bin/bash -c"
-export CROSS_COMPILE=aarch64-linux-gnu-
-export ARCH=arm64
-export CC=aarch64-linux-gnu-gcc
+export CROSS_COMPILE=aarch64-linux-gnu- ARCH=arm64 CC=aarch64-linux-gnu-gcc
 
 #git clone https://github.com/dsys1100/debian-on-mido-auto.git --depth 1 && cd debian-on-mido-auto
 git clone https://github.com/msm8953-mainline/linux.git --depth=1 -b $krnver/main && cd linux
@@ -107,14 +101,7 @@ $chrootcomm "useradd -m -G sudo -s /bin/bash $username"
 $chrootcomm "echo '$username ALL=(ALL:ALL) ALL' >> /etc/sudoers.d/$username"
 $chrootcomm "chmod 0440 /etc/sudoers.d/$username"
 $chrootcomm "echo '$username:$userpass' | chpasswd"
-$chrootcomm "usermod -aG sudo $username"
-$chrootcomm "usermod -aG audio $username"
-$chrootcomm "usermod -aG video $username"
-$chrootcomm "usermod -aG render $username"
-$chrootcomm "usermod -aG input $username"
-$chrootcomm "usermod -aG netdev $username"
-$chrootcomm "usermod -aG plugdev $username"
-$chrootcomm "usermod -aG bluetooth $username"
+$chrootcomm "usermod -aG sudo,audio,video,render,input,netdev,plugdev,bluetooth $username"
 
 dtc -I dts -O dtb -o ./fastcharge.dtbo ./fastcharge.dts
 sudo mkdir ./rootfs/boot/dtbo && sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
@@ -122,6 +109,7 @@ sudo mkdir ./rootfs/boot/dtbo && sudo cp ./fastcharge.dtbo ./rootfs/boot/dtbo
 sudo cp -r ./firmware/* ./rootfs/lib/firmware/
 rm *-dbg_*.deb && sudo cp linux*deb ./rootfs/tmp/
 $chrootcomm "apt install -y /tmp/*.deb" && sudo rm ./rootfs/tmp/*
+sudo mkdir -p ./rootfs/etc/initramfs-tools/
 sudo tee -a ./rootfs/etc/initramfs-tools/modules > /dev/null <<EOF
 edt_ft5x06
 goodix_ts
@@ -132,6 +120,7 @@ panel_xiaomi_nt35532
 panel_xiaomi_otm1911
 panel_xiaomi_tianma_nt35596
 EOF
+sudo mkdir -p ./rootfs/etc/initramfs-tools/hooks
 sudo tee ./rootfs/etc/initramfs-tools/hooks/mido-fw > /dev/null <<'EOF'
 #!/bin/sh
 PREREQ=""
@@ -217,6 +206,14 @@ sudo tee ./rootfs/etc/systemd/system/ModemManager.service.d/uim-selection.conf <
 ExecStartPre=/usr/local/sbin/uim-select
 EOF
 $chrootcomm "apt update && apt full-upgrade -y && apt autoremove -y && apt clean && apt autoclean"
+
+sudo mkdir -p ./rootfs/etc/profile.d
+sudo wget https://gitlab.postmarketos.org/postmarketOS/pmaports/-/raw/6c1ac7813870a72011f3adda4d79178330e8c7c0/device/community/soc-qcom-msm8953/adreno-a506-quirks.sh -O ./rootfs/etc/profile.d/adreno-a506-quirks.sh
+sudo mkdir -p ./rootfs/etc/systemd/system.conf.d
+sudo tee ./rootfs/etc/systemd/system.conf.d/stop-timeout.conf >/dev/null <<EOF
+[Manager]
+DefaultTimeoutStopSec=15s
+EOF
 sudo sed -i 's/MODULES=most/MODULES=dep/g' ./rootfs/etc/initramfs-tools/initramfs.conf
 sudo tee -a ./rootfs/etc/motd > /dev/null <<'EOF'
 
