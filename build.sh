@@ -78,7 +78,7 @@ Package: desktop-base
 Pin: release n=B1ackOS
 Pin-Priority: -1
 EOF
-$chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack man-db"
+$chrootcomm "apt update && apt-mark hold b1ack-base grub-theme-b1ack"
 
 $chrootcomm "echo '$hostname' > /etc/hostname"
 $chrootcomm "echo '127.0.0.1 $hostname' >> /etc/hosts"
